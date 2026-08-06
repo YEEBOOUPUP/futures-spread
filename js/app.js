@@ -601,6 +601,14 @@
   function refreshResult(animate) {
     var a = state.legA, b = state.legB;
     if (!a.product || !a.contract || !b.product || !b.contract) { clearResult(); return; }
+    // 月差模式提示（外盘品种为连续合约，无月份区分）
+    if (state.mode === 'calendar') {
+      var infoA = FuturesData.getProductInfo(a.product);
+      var nA = infoA ? infoA.contracts.length : 0;
+      $('legHint').textContent = nA < 2
+        ? '外盘品种为连续合约，无月份区分，请用「跨品种价差」模式'
+        : '月差 = 同一品种的合约 A − 合约 B（如 P 01月 − 05月），可点 ⇄ 交换方向';
+    }
     state.currentDates = FuturesData.getProductDates(a.product) || [];
     if (!state.currentDates.length) { clearResult(); return; }
 
