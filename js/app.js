@@ -184,9 +184,11 @@
     var input = $(inputId);
     var list = $(listId);
     var items = FuturesData.getProducts().map(function (code) {
-      return { code: code, label: prodLabel(code) };
+      var info = FuturesData.getProductInfo(code);
+      return { code: code, label: prodLabel(code), foreign: !!(info && info.foreign) };
     });
     var activeIdx = -1;
+    var flat = [];
 
     function visible(keyword) {
       var kw = (keyword || '').trim().toLowerCase();
@@ -197,33 +199,46 @@
     }
     function render(keyword) {
       var arr = visible(keyword);
+      var dom = arr.filter(function (x) { return !x.foreign; });
+      var fgn = arr.filter(function (x) { return x.foreign; });
       list.innerHTML = '';
-      if (!arr.length) {
+      flat = [];
+      if (dom.length) addGroup('国内品种', dom);
+      if (fgn.length) addGroup('海外品种', fgn);
+      if (!flat.length) {
         var li = document.createElement('li');
         li.className = 'no-result';
         li.textContent = '无匹配品种';
         list.appendChild(li);
-      } else {
-        arr.forEach(function (it, i) {
-          var li = document.createElement('li');
-          var code = document.createElement('span');
-          code.className = 'pcode';
-          code.textContent = it.code;
-          var nm = document.createElement('span');
-          nm.className = 'pname';
-          nm.textContent = it.label.indexOf(' · ') >= 0 ? it.label.split(' · ')[1] : '';
-          li.appendChild(code);
-          li.appendChild(nm);
-          li.addEventListener('mousedown', function (e) { e.preventDefault(); select(it); });
-          li.addEventListener('mouseenter', function () { setActive(i); });
-          list.appendChild(li);
-        });
       }
       list.classList.add('open');
     }
+    function addGroup(title, groupItems) {
+      var h = document.createElement('li');
+      h.className = 'group-title';
+      h.textContent = title + '（' + groupItems.length + '）';
+      list.appendChild(h);
+      groupItems.forEach(function (it) {
+        flat.push(it);
+        var idx = flat.length - 1;
+        var li = document.createElement('li');
+        li.className = 'item';
+        var code = document.createElement('span');
+        code.className = 'pcode';
+        code.textContent = it.code;
+        var nm = document.createElement('span');
+        nm.className = 'pname';
+        nm.textContent = it.label.indexOf(' · ') >= 0 ? it.label.split(' · ')[1] : '';
+        li.appendChild(code);
+        li.appendChild(nm);
+        li.addEventListener('mousedown', function (e) { e.preventDefault(); select(it); });
+        li.addEventListener('mouseenter', function () { setActive(idx); });
+        list.appendChild(li);
+      });
+    }
     function setActive(i) {
       activeIdx = i;
-      var lis = list.querySelectorAll('li');
+      var lis = list.querySelectorAll('li.item');
       lis.forEach(function (li, j) { li.classList.toggle('active', j === activeIdx); });
       var el = lis[activeIdx];
       if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest' });
