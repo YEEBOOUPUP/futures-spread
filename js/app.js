@@ -11,7 +11,7 @@
   var state = {
     dataset: null,
     source: null,          // 'local' | 'remote' | 'none'
-    mode: 'spread',        // 'spread' 跨品种价差 | 'calendar' 同品种月差
+    mode: 'spread',        // 'spread' 跨品种价差 | 'calendar' 同品种月差 | 'flow' 国际利润流
     view: 'seasonal',      // 'seasonal' 季节性图（默认）| 'time' 时序图
     rangeStart: 0,         // 时序图范围（交易日索引，含）
     rangeEnd: 0,
@@ -25,6 +25,8 @@
     pickerB: null,
     legA: { product: null, contract: null },
     legB: { product: null, contract: null },
+    profitFlow: null,      // data/profit_flow.json 缓存
+    flowIndicator: null,   // 当前国际利润流指标列
     chart: null
   };
 
@@ -109,6 +111,10 @@
     $('tableLimit').addEventListener('change', renderTable);
     $('tableOrder').addEventListener('change', renderTable);
     $('showPricesChk').addEventListener('change', refreshResult);
+    $('flowSel').addEventListener('change', function () {
+      state.flowIndicator = this.value;
+      renderProfitFlow();
+    });
   }
 
   // ================= 选择器 =================
@@ -493,6 +499,18 @@
     document.querySelectorAll('.mode-btn').forEach(function (b) {
       b.classList.toggle('active', b.dataset.mode === mode);
     });
+    var isFlow = mode === 'flow';
+    var legs = document.querySelector('.legs');
+    if (legs) legs.style.display = isFlow ? 'none' : '';
+    var fc = $('flowControl');
+    if (fc) fc.style.display = isFlow ? '' : 'none';
+    setFlowControls(isFlow);
+    if (isFlow) {
+      $('legHint').textContent = '国际利润流：国际油脂油料相关价差的季节性图（每年一条线，最新年份红色加粗，点击图例可隐藏年份）';
+      $('modeShortcuts').innerHTML = '';
+      loadProfitFlow();
+      return;
+    }
     if (mode === 'calendar') {
       if (state.pickerB) state.pickerB.setDisabled(true);
       syncCalendarLegB();
@@ -503,6 +521,113 @@
     }
     renderShortcuts();
     refreshResult();
+  }
+
+  /** 国际利润流模式下隐藏与品种图无关的控件（切回时恢复） */
+  function setFlowControls(isFlow) {
+    var ids = ['rangeControl', 'pricesChkLabel', 'summaryGrid'];
+    ids.forEach(function (id) {
+      var el = $(id);
+      if (el) el.style.display = isFlow ? 'none' : '';
+    });
+    var vs = document.querySelector('.view-switch');
+    if (vs) vs.style.display = isFlow ? 'none' : '';
+    var tw = document.querySelector('.table-wrap');
+    if (tw) tw.style.display = isFlow ? 'none' : '';
+  }
+
+  /** 加载国际利润流数据（懒加载缓存） */
+  function loadProfitFlow() {
+    if (state.profitFlow) { fillFlowSel(); renderProfitFlow(); return; }
+    fetch('data/profit_flow.json', { cache: 'no-cache' })
+      .then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      })
+      .then(function (js) {
+        if (!js || !js.indicators) throw new Error('profit_flow.json 结构无效');
+        state.profitFlow = js;
+        fillFlowSel();
+        renderProfitFlow();
+      })
+      .catch(function (err) { showStatus('err', '国际利润流数据加载失败：' + err.message); });
+  }
+
+  function fillFlowSel() {
+    var pf = state.profitFlow;
+    if (!pf) return;
+    var sel = $('flowSel');
+    sel.innerHTML = '';
+    var order = pf.order || Object.keys(pf.indicators);
+    order.forEach(function (c) {
+      var ind = pf.indicators[c];
+      var o = document.createElement('option');
+      o.value = c;
+      o.textContent = ind.name + (ind.unit ? '（' + ind.unit + '）' : '');
+      sel.appendChild(o);
+    });
+    if (state.flowIndicator && pf.indicators[state.flowIndicator]) {
+      sel.value = state.flowIndicator;
+    } else {
+      state.flowIndicator = sel.value || order[0];
+    }
+  }
+
+  /** 渲染国际利润流季节性图（每年一条线，最新年红色加粗，图例点击隐藏） */
+  function renderProfitFlow() {
+    var pf = state.profitFlow;
+    if (!pf) return;
+    var ind = pf.indicators[state.flowIndicator];
+    if (!ind) return;
+    $('resultTitle').textContent = ind.name + (ind.unit ? '（' + ind.unit + '）' : '') + ' · 季节性';
+    $('resultMeta').textContent = '国际利润流 · 年度叠加（' + Object.keys(ind.years).length + ' 年）';
+    var labels = pf.axis;
+    var years = Object.keys(ind.years).sort();
+    var datasets = years.map(function (y, i) {
+      var isLatest = i === years.length - 1;
+      return {
+        label: y + '年',
+        data: ind.years[y],
+        borderColor: isLatest ? '#dc2626' : yearColor(i, years.length),
+        backgroundColor: isLatest ? 'rgba(220, 38, 38, .05)' : 'transparent',
+        pointRadius: 0,
+        pointHoverRadius: 3,
+        borderWidth: isLatest ? 2.8 : 1.4,
+        tension: 0.1,
+        spanGaps: true,
+        hidden: !!state.hiddenYears[y]
+      };
+    });
+    updateChart({
+      type: 'line',
+      data: { labels: labels, datasets: datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: {
+            labels: { boxWidth: 16, font: { size: 11 } },
+            onClick: seasonalLegendClick
+          },
+          tooltip: {
+            callbacks: {
+              title: function (items) { return '2020-' + items[0].label; },
+              label: function (ctx) { return ' ' + ctx.dataset.label + ' ' + fmtNum(ctx.parsed.y); }
+            }
+          }
+        },
+        scales: {
+          x: {
+            title: { display: true, text: '日期（年内，MM-DD）', font: { size: 11 } },
+            ticks: { maxTicksLimit: 12, maxRotation: 0, autoSkip: true },
+            grid: { display: false }
+          },
+          y: yScale({})
+        }
+      }
+    }, true);
+    $('chartEmpty').style.display = 'none';
   }
 
   /** 按当前模式渲染快捷键（月差：91/15/59；价差：豆棕/菜豆/菜棕/豆菜粕） */
