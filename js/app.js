@@ -769,11 +769,9 @@
     list.innerHTML = '';
     var d = FuturesData.describe();
     var lines = [];
-    lines.push(['数据源', 'OpenCTP + AkShare 自动采集']);
+    lines.push(['数据源', 'OpenCTP + 新浪 自动采集']);
     lines.push(['更新时间', d && d.updated_at ? d.updated_at : '—']);
-    lines.push(['交易日数量', d ? String(d.days) : '—']);
     lines.push(['品种数量', d ? String(d.products) : '—']);
-    lines.push(['日期范围', d && d.firstDate ? d.firstDate + ' ~ ' + d.lastDate : '—']);
 
     lines.forEach(function (kv) {
       var li = document.createElement('li');
@@ -783,7 +781,7 @@
 
     var dot = $('dataDot');
     var text = $('dataStatusText');
-    if (d && d.days) { dot.className = 'dot ok'; text.textContent = '自动采集 · ' + (d.lastDate || ''); }
+    if (d && d.products) { dot.className = 'dot ok'; text.textContent = '自动采集 · ' + (d.updated_at || ''); }
     else { dot.className = 'dot err'; text.textContent = '无数据'; }
   }
 

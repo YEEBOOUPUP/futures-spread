@@ -15,6 +15,6 @@ print('app.js 引用的 id 数:', len(ids_in_js))
 print('index.html 定义的 id 数:', len(ids_in_html))
 print('缺失:', sorted(missing) if missing else '无，全部匹配 OK')
 
-for f in ['js/parser.js', 'js/data.js', 'js/app.js', 'css/style.css', 'data/data.json']:
+for f in ['js/parser.js', 'js/data.js', 'js/app.js', 'css/style.css', 'data/index.json']:
     p = os.path.join(BASE, f)
     print(f, '存在' if os.path.exists(p) else '缺失!')

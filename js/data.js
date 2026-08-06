@@ -24,7 +24,7 @@
           return res.json();
         })
         .then(function (json) {
-          if (!json || !json.dates || !json.products) throw new Error('index.json 结构无效');
+          if (!json || !json.products) throw new Error('index.json 结构无效');
           indexData = json;
           cache = {};
           resolve({ dataset: json, source: 'remote' });
@@ -69,7 +69,7 @@
     return (indexData && indexData.products[code]) || null;
   }
 
-  function getDates() { return indexData ? indexData.dates : []; }
+  function getDates() { return []; }   // 已废弃：每品种独立日期轴（用 getProductDates）
 
   /** 某品种的日期轴（独立 dates） */
   function getProductDates(code) {
@@ -130,10 +130,7 @@
   function describe() {
     if (!indexData) return null;
     return {
-      days: indexData.dates.length,
       products: indexData.products ? Object.keys(indexData.products).length : 0,
-      firstDate: indexData.dates[0] || null,
-      lastDate: indexData.dates[indexData.dates.length - 1] || null,
       updated_at: indexData.updated_at || null,
       source: indexData.source || null
     };
