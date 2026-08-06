@@ -341,14 +341,3 @@ select:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent
   .operator { text-align: center; padding: 0; }
   .chart-wrap { height: 260px; }
 }
-
-/* ---------- 国际利润流 ---------- */
-.flow-control {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 12px;
-  flex-wrap: wrap;
-}
-.flow-label { font-size: 13px; color: var(--muted); white-space: nowrap; }
-.flow-desc { font-size: 12px; color: var(--muted); }
