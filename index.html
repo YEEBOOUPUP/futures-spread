@@ -33,7 +33,10 @@
       <div class="leg">
         <div class="leg-head">
           <span class="leg-tag tag-a">A</span>
-          <select id="legAProduct" class="select-product"></select>
+          <div class="product-picker">
+            <input type="text" class="product-input" id="legAProductInput" placeholder="搜索品种：代码 / 中文" autocomplete="off" spellcheck="false">
+            <ul class="product-list" id="legAProductList"></ul>
+          </div>
         </div>
         <select id="legAContract" class="select-contract"></select>
         <div class="leg-price" id="legAPrice">—</div>
@@ -45,7 +48,10 @@
       <div class="leg">
         <div class="leg-head">
           <span class="leg-tag tag-b">B</span>
-          <select id="legBProduct" class="select-product"></select>
+          <div class="product-picker">
+            <input type="text" class="product-input" id="legBProductInput" placeholder="搜索品种：代码 / 中文" autocomplete="off" spellcheck="false">
+            <ul class="product-list" id="legBProductList"></ul>
+          </div>
         </div>
         <select id="legBContract" class="select-contract"></select>
         <div class="leg-price" id="legBPrice">—</div>

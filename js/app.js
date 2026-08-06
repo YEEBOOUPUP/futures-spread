@@ -21,6 +21,8 @@
     yMin: null,            // 纵轴范围（null = 自动）
     yMax: null,
     hiddenYears: {},       // 季节性图用户在图例上隐藏的年份 { "2020": true }
+    pickerA: null,         // 品种搜索组件实例
+    pickerB: null,
     legA: { product: null, contract: null },
     legB: { product: null, contract: null },
     chart: null
@@ -86,22 +88,9 @@
     document.querySelectorAll('.view-switch .mode-btn').forEach(function (btn) {
       btn.addEventListener('click', function () { setView(btn.dataset.view); });
     });
-    $('legAProduct').addEventListener('change', function () {
-      state.legA.product = this.value;
-      state.legA.contract = null;
-      fillContracts('A');
-      if (state.mode === 'calendar') syncCalendarLegB();
-      refreshAsync();
-    });
     $('legAContract').addEventListener('change', function () {
       state.legA.contract = this.value;
       refreshResult();
-    });
-    $('legBProduct').addEventListener('change', function () {
-      state.legB.product = this.value;
-      state.legB.contract = null;
-      fillContracts('B');
-      refreshAsync();
     });
     $('legBContract').addEventListener('change', function () {
       state.legB.contract = this.value;
@@ -123,20 +112,151 @@
   }
 
   // ================= 选择器 =================
+  /** 品种中文名兜底（openctp 部分品种名缺失/无效时用） */
+  var PRODUCT_NAMES = {
+    'A': '豆一', 'AD': '苹果干', 'AG': '白银', 'AL': '铝', 'AO': '', 'AP': '苹果',
+    'AU': '黄金', 'B': '豆二', 'BB': '胶合板', 'BC': '国际铜', 'BR': '丁二烯橡胶',
+    'BU': '沥青', 'BZ': '纯苯', 'C': '玉米', 'CF': '棉花', 'CJ': '红枣', 'CS': '玉米淀粉',
+    'CU': '铜', 'CY': '棉纱', 'EB': '苯乙烯', 'EC': '集运指数', 'EG': '乙二醇', 'FB': '纤维板',
+    'FG': '玻璃', 'FU': '燃料油', 'HC': '热卷', 'I': '铁矿石', 'IC': '中证500',
+    'IF': '沪深300', 'IH': '上证50', 'IM': '中证1000', 'J': '焦炭', 'JD': '鸡蛋',
+    'JM': '焦煤', 'JR': '粳稻', 'L': '塑料', 'LC': '碳酸锂', 'LG': '原木', 'LH': '生猪',
+    'LU': '低硫燃料油', 'M': '豆粕', 'MA': '甲醇', 'NI': '镍', 'NR': '20号胶', 'OI': '菜油',
+    'OP': '', 'P': '棕榈油', 'PB': '铅', 'PD': '钯', 'PF': '短纤', 'PG': '液化气',
+    'PK': '花生', 'PL': '', 'PM': '普麦', 'PP': '聚丙烯', 'PR': '瓶片', 'PS': '多晶硅',
+    'PT': '铂', 'PX': '对二甲苯', 'RB': '螺纹钢', 'RI': '早籼稻', 'RM': '菜粕', 'RR': '粳米',
+    'RS': '菜籽', 'RU': '橡胶', 'SA': '纯碱', 'SC': '原油', 'SF': '硅铁', 'SH': '烧碱',
+    'SI': '工业硅', 'SM': '锰硅', 'SN': '锡', 'SP': '纸浆', 'SR': '白糖', 'SS': '不锈钢',
+    'T': '十年国债', 'TA': 'PTA', 'TF': '五年国债', 'TL': '三十年期国债', 'TS': '两年国债',
+    'UR': '尿素', 'V': '聚氯乙烯', 'WH': '强麦', 'WR': '线材', 'Y': '豆油', 'ZC': '动力煤',
+    'ZN': '锌'
+  };
+
   function initSelector() {
     var prods = FuturesData.getProducts();
-    // value 用品种代码（P），显示带中文名（P · 棕榈油）
-    fillSelect($('legAProduct'), prods, false, prodLabel);
-    fillSelect($('legBProduct'), prods, false, prodLabel);
     if (!prods.length) { showStatus('warn', '数据中没有任何品种'); return; }
 
-    state.legA.product = $('legAProduct').value;
-    state.legB.product = $('legBProduct').value;
+    state.pickerA = createProductPicker('legAProductInput', 'legAProductList', function (code) {
+      state.legA.product = code;
+      state.legA.contract = null;
+      fillContracts('A');
+      if (state.mode === 'calendar') syncCalendarLegB();
+      refreshAsync();
+    });
+    state.pickerB = createProductPicker('legBProductInput', 'legBProductList', function (code) {
+      state.legB.product = code;
+      state.legB.contract = null;
+      fillContracts('B');
+      refreshAsync();
+    });
+
+    state.legA.product = prods[0];
+    state.legB.product = prods[1] || prods[0];
+    state.pickerA.setValue(state.legA.product);
+    state.pickerB.setValue(state.legB.product);
     fillContracts('A');
     fillContracts('B');
     pickDefaultContracts();
     setMode(state.mode);
     refreshAsync();   // 异步加载 A/B 品种数据后计算
+  }
+
+  /** 品种显示名：代码 · 中文（无效名称回退内置映射） */
+  function displayName(code) {
+    var info = FuturesData.getProductInfo(code);
+    var name = (info && info.name) || '';
+    if (!name || name === code || name === code.toLowerCase() ||
+        (name.length <= 2 && name === name.toUpperCase())) {
+      name = PRODUCT_NAMES[code] || '';
+    }
+    return name;
+  }
+
+  function prodLabel(code) {
+    var name = displayName(code);
+    return name ? code + ' · ' + name : code;
+  }
+
+  /**
+   * 品种搜索下拉组件：输入过滤（代码/中文），键盘上下+回车选择，点击选择
+   */
+  function createProductPicker(inputId, listId, onChange) {
+    var input = $(inputId);
+    var list = $(listId);
+    var items = FuturesData.getProducts().map(function (code) {
+      return { code: code, label: prodLabel(code) };
+    });
+    var activeIdx = -1;
+
+    function visible(keyword) {
+      var kw = (keyword || '').trim().toLowerCase();
+      if (!kw) return items;
+      return items.filter(function (it) {
+        return it.code.toLowerCase().indexOf(kw) >= 0 || it.label.toLowerCase().indexOf(kw) >= 0;
+      });
+    }
+    function render(keyword) {
+      var arr = visible(keyword);
+      list.innerHTML = '';
+      if (!arr.length) {
+        var li = document.createElement('li');
+        li.className = 'no-result';
+        li.textContent = '无匹配品种';
+        list.appendChild(li);
+      } else {
+        arr.forEach(function (it, i) {
+          var li = document.createElement('li');
+          var code = document.createElement('span');
+          code.className = 'pcode';
+          code.textContent = it.code;
+          var nm = document.createElement('span');
+          nm.className = 'pname';
+          nm.textContent = it.label.indexOf(' · ') >= 0 ? it.label.split(' · ')[1] : '';
+          li.appendChild(code);
+          li.appendChild(nm);
+          li.addEventListener('mousedown', function (e) { e.preventDefault(); select(it); });
+          li.addEventListener('mouseenter', function () { setActive(i); });
+          list.appendChild(li);
+        });
+      }
+      list.classList.add('open');
+    }
+    function setActive(i) {
+      activeIdx = i;
+      var lis = list.querySelectorAll('li');
+      lis.forEach(function (li, j) { li.classList.toggle('active', j === activeIdx); });
+      var el = lis[activeIdx];
+      if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest' });
+    }
+    function select(it) {
+      input.value = it.label;
+      list.classList.remove('open');
+      activeIdx = -1;
+      onChange(it.code);
+    }
+    input.addEventListener('focus', function () { render(input.value); });
+    input.addEventListener('input', function () { activeIdx = -1; render(input.value); });
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setActive(activeIdx + 1); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(activeIdx - 1); }
+      else if (e.key === 'Enter') {
+        e.preventDefault();
+        var arr = visible(input.value);
+        if (activeIdx >= 0 && arr[activeIdx]) select(arr[activeIdx]);
+        else if (arr.length === 1) select(arr[0]);
+      }
+      else if (e.key === 'Escape') { list.classList.remove('open'); }
+    });
+    document.addEventListener('click', function (e) {
+      if (!input.parentElement.contains(e.target)) list.classList.remove('open');
+    });
+    return {
+      setValue: function (code) {
+        var it = items.filter(function (x) { return x.code === code; })[0];
+        input.value = it ? it.label : '';
+      },
+      setDisabled: function (dis) { input.disabled = dis; }
+    };
   }
 
   /** 异步确保 A/B 品种数据已加载，再计算渲染 */
@@ -150,8 +270,8 @@
   }
 
   function prodLabel(code) {
-    var info = FuturesData.getProductInfo(code);
-    return info && info.name ? code + ' · ' + info.name : code;
+    var name = displayName(code);
+    return name ? code + ' · ' + name : code;
   }
 
   /** 填充下拉；displayFn(v) 用于显示名（默认显示原值），value 始终为 v */
@@ -358,13 +478,12 @@
     document.querySelectorAll('.mode-btn').forEach(function (b) {
       b.classList.toggle('active', b.dataset.mode === mode);
     });
-    var bSel = $('legBProduct');
     if (mode === 'calendar') {
-      bSel.disabled = true;
+      if (state.pickerB) state.pickerB.setDisabled(true);
       syncCalendarLegB();
       $('legHint').textContent = '月差 = 同一品种的合约 A − 合约 B（如 P 01月 − 05月），可点 ⇄ 交换方向';
     } else {
-      bSel.disabled = false;
+      if (state.pickerB) state.pickerB.setDisabled(false);
       $('legHint').textContent = '价差 = 品种 A 合约 − 品种 B 合约（可跨品种任意组合，点 ⇄ 交换方向）';
     }
     renderShortcuts();
@@ -422,8 +541,8 @@
       showStatus('warn', '数据中没有 ' + pA + ' 或 ' + pB + ' 品种');
       return;
     }
-    state.legA.product = pA; $('legAProduct').value = pA;
-    state.legB.product = pB; $('legBProduct').value = pB;
+    state.legA.product = pA; if (state.pickerA) state.pickerA.setValue(pA);
+    state.legB.product = pB; if (state.pickerB) state.pickerB.setValue(pB);
     state.legA.contract = null; state.legB.contract = null;
     fillContracts('A');
     fillContracts('B');
@@ -451,7 +570,7 @@
 
   function syncCalendarLegB() {
     state.legB.product = state.legA.product;
-    $('legBProduct').value = state.legA.product;
+    if (state.pickerB) state.pickerB.setValue(state.legA.product);
     var info = FuturesData.getProductInfo(state.legA.product);
     var ctrs = info ? info.contracts : [];
     var idx = ctrs.indexOf(state.legA.contract);
@@ -469,8 +588,8 @@
     var p = state.legA.product, c = state.legA.contract;
     state.legA.product = state.legB.product; state.legA.contract = state.legB.contract;
     state.legB.product = p; state.legB.contract = c;
-    $('legAProduct').value = state.legA.product || '';
-    $('legBProduct').value = state.legB.product || '';
+    if (state.pickerA) state.pickerA.setValue(state.legA.product);
+    if (state.pickerB) state.pickerB.setValue(state.legB.product);
     fillContracts('A');
     fillContracts('B');
     if (state.mode === 'calendar') syncCalendarLegB();
