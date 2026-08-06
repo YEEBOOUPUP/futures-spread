@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>期货月差 · 价差分析</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <h1>期货月差 · 价差分析</h1>
+    <span class="subtitle">选取品种与合约，一键查看月差 / 价差</span>
+  </div>
+  <div class="datastatus" id="dataStatus">
+    <span class="dot" id="dataDot"></span>
+    <span id="dataStatusText">数据加载中…</span>
+  </div>
+</header>
+
+<main class="layout">
+
+  <!-- 选择区 -->
+  <section class="card selector">
+    <div class="mode-switch">
+      <button class="mode-btn active" data-mode="spread">跨品种价差</button>
+      <button class="mode-btn" data-mode="calendar">同品种月差</button>
+      <span class="metric-row">
+        <label for="metricSel">价格指标</label>
+        <select id="metricSel">
+          <option value="close">收盘价</option>
+          <option value="settle">结算价</option>
+        </select>
+      </span>
+    </div>
+
+    <div class="legs">
+      <!-- 腿 A -->
+      <div class="leg">
+        <div class="leg-head">
+          <span class="leg-tag tag-a">A</span>
+          <select id="legAProduct" class="select-product"></select>
+        </div>
+        <select id="legAContract" class="select-contract"></select>
+        <div class="leg-price" id="legAPrice">—</div>
+      </div>
+
+      <div class="operator">−</div>
+
+      <!-- 腿 B -->
+      <div class="leg">
+        <div class="leg-head">
+          <span class="leg-tag tag-b">B</span>
+          <select id="legBProduct" class="select-product"></select>
+        </div>
+        <select id="legBContract" class="select-contract"></select>
+        <div class="leg-price" id="legBPrice">—</div>
+      </div>
+
+      <div class="swap-wrap">
+        <button id="swapBtn" class="btn-ghost" title="交换 A / B">⇄ 交换</button>
+      </div>
+    </div>
+
+    <div class="hint" id="legHint"></div>
+    <div class="shortcuts" id="modeShortcuts"></div>
+  </section>
+
+  <!-- 结果区 -->
+  <section class="card result">
+    <div class="result-head">
+      <h2 id="resultTitle">价差走势</h2>
+      <div class="result-meta" id="resultMeta"></div>
+    </div>
+
+    <div class="chart-tools">
+      <div class="view-switch">
+        <button class="mode-btn active" data-view="seasonal">季节性图 · 按年叠加</button>
+        <button class="mode-btn" data-view="time">时序图</button>
+      </div>
+      <div class="yaxis-control">
+        <span class="yaxis-label">纵轴范围</span>
+        <input type="number" id="yMin" placeholder="自动" step="any">
+        <span class="yaxis-sep">~</span>
+        <input type="number" id="yMax" placeholder="自动" step="any">
+        <button class="btn-ghost" id="yAutoBtn" title="恢复自动缩放">自动</button>
+      </div>
+      <label class="chk" id="pricesChkLabel"><input type="checkbox" id="showPricesChk"> 叠加显示 A / B 价格线</label>
+    </div>
+
+    <div class="summary-grid" id="summaryGrid"></div>
+
+    <div class="chart-wrap">
+      <canvas id="spreadChart"></canvas>
+      <div class="chart-empty" id="chartEmpty">请选择品种与合约</div>
+    </div>
+
+    <div class="range-control" id="rangeControl">
+      <div class="range-quick" id="rangeQuickBtns">
+        <span class="range-quick-label">快捷</span>
+        <button class="range-q" data-months="1">最近1月</button>
+        <button class="range-q" data-months="6">最近半年</button>
+        <button class="range-q" data-months="12">最近1年</button>
+      </div>
+      <div class="range-labels">
+        <span class="num" id="rangeStartText">—</span>
+        <span class="range-arrow">~</span>
+        <span class="num" id="rangeEndText">—</span>
+        <button class="range-reset" id="rangeResetBtn" title="恢复全部时间范围">↺ 重置</button>
+      </div>
+      <div class="range-wrap" id="rangeWrap">
+        <input type="range" id="rangeStart" min="0" max="0" value="0">
+        <input type="range" id="rangeEnd" min="0" max="0" value="0">
+      </div>
+      <div class="range-hint" id="rangeHint">左右拉动两端手柄，调节显示的时间范围</div>
+    </div>
+
+    <div class="table-wrap">
+      <div class="table-toolbar">
+        <span>明细</span>
+        <label class="inl">显示 <input type="number" id="tableLimit" value="30" min="5" max="500" step="5"> 条
+          <select id="tableOrder">
+            <option value="new">最近在前</option>
+            <option value="old">最早在前</option>
+          </select>
+        </label>
+      </div>
+      <table class="detail-table" id="detailTable">
+        <thead><tr><th>日期</th><th>A 价格</th><th>B 价格</th><th>价差 (A−B)</th><th>日变化</th></tr></thead>
+        <tbody id="detailBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 数据管理 -->
+  <section class="card datapanel">
+    <h2>数据管理</h2>
+
+    <div class="panel-grid">
+      <div class="panel-col">
+        <h3>① 手动上传 Excel</h3>
+        <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" class="file-input">
+        <p class="muted">支持 WIND 宽表格式（第 3 行证券代码、第 6 行 close/settle），自动识别品种与合约，保存在本机浏览器（localStorage），仅你自己可见。</p>
+        <div class="upload-progress" id="uploadProgress"></div>
+      </div>
+
+      <div class="panel-col">
+        <h3>② 数据源状态</h3>
+        <ul class="status-list" id="statusList"></ul>
+        <div class="panel-actions">
+          <button id="clearLocalBtn" class="btn-danger">清除本地数据（改用线上 data.json）</button>
+        </div>
+      </div>
+
+      <div class="panel-col">
+        <h3>③ 每日更新（线上模式）</h3>
+        <p class="muted">把最新 Excel 用转换脚本生成 data.json 并随站点部署：</p>
+        <pre class="code-block">python tools/excel_to_json.py ^
+  --input WIND价格-wyb.xlsx ^
+  --output data/data.json</pre>
+        <p class="muted">详见 README「每日更新流程」。</p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer">
+  数据来源：每日更新的 Excel 文件 · 本页为静态站点，无后端服务器
+</footer>
+
+<!-- 本地库优先，缺失时 app.js 会回退到 CDN -->
+<script src="js/xlsx.full.min.js"></script>
+<script src="js/chart.umd.js"></script>
+<script src="js/parser.js"></script>
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
