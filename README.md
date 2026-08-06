@@ -104,3 +104,19 @@ python -m http.server 8000 --directory futures-spread
 - **为什么某些品种历史只有 2019 起？** 新浪免费源历史深度约 2019 年；2019 前完整全市场历史无免费源。
 - **为什么今天还没数据？** 每日 16:00 采集，收盘价 15:00 后确定；若当天休市则自动跳过。
 - **计划任务没跑？** 需保持电脑开机；错过会补跑（StartWhenAvailable）。
+
+## 外盘数据（马棕 / 美豆油月差）
+
+- 来源：您的 Excel（`油脂油料数据库.xlsx` → "国外油脂期货" sheet）
+  - 马棕（F_FCPO）：A~N 列，主力 + 01~12 月连续合约，2005 年起
+  - 美豆油（F_BO）：AE~AO 列，主力 + 最近 + 01/03/05/07/08/09/10/12 月，2000 年起
+- **每日更新**：更新完 Excel 后双击 `collector/update_foreign.bat`（自动导入 → 推送 → 网站 1-3 分钟更新）
+- 注：月份合约数据一般比主力晚一天（手动维护），属正常
+
+## 核心品种历史恢复
+
+若 `WIND价格-wyb.xlsx` 某天只剩部分数据（如仅 2026 年），可从 git 历史恢复完整版：
+```
+python tools/restore_from_git.py
+git add -A && git commit -m "恢复核心品种数据" && git push origin main
+```
