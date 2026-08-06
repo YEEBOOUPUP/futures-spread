@@ -26,13 +26,6 @@
     <div class="mode-switch">
       <button class="mode-btn active" data-mode="spread">跨品种价差</button>
       <button class="mode-btn" data-mode="calendar">同品种月差</button>
-      <span class="metric-row">
-        <label for="metricSel">价格指标</label>
-        <select id="metricSel">
-          <option value="close">收盘价</option>
-          <option value="settle">结算价</option>
-        </select>
-      </span>
     </div>
 
     <div class="legs">
@@ -139,27 +132,23 @@
 
     <div class="panel-grid">
       <div class="panel-col">
-        <h3>① 手动上传 Excel</h3>
-        <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" class="file-input">
-        <p class="muted">支持 WIND 宽表格式（第 3 行证券代码、第 6 行 close/settle），自动识别品种与合约，保存在本机浏览器（localStorage），仅你自己可见。</p>
-        <div class="upload-progress" id="uploadProgress"></div>
-      </div>
-
-      <div class="panel-col">
-        <h3>② 数据源状态</h3>
+        <h3>① 数据源状态</h3>
         <ul class="status-list" id="statusList"></ul>
-        <div class="panel-actions">
-          <button id="clearLocalBtn" class="btn-danger">清除本地数据（改用线上 data.json）</button>
-        </div>
       </div>
 
       <div class="panel-col">
-        <h3>③ 每日更新（线上模式）</h3>
-        <p class="muted">把最新 Excel 用转换脚本生成 data.json 并随站点部署：</p>
-        <pre class="code-block">python tools/excel_to_json.py ^
-  --input WIND价格-wyb.xlsx ^
-  --output data/data.json</pre>
-        <p class="muted">详见 README「每日更新流程」。</p>
+        <h3>② 自动采集（无需手动操作）</h3>
+        <p class="muted">
+          历史数据由 AkShare 一次拉取重建，之后每个交易日收盘后由 Windows 计划任务自动：
+          调 openctp 数据中心接口获取全市场收盘价/结算价 → 增量合并 → 推送到 GitHub。
+        </p>
+        <p class="muted">运行脚本：<span class="mono">collector/daily_fetch.py</span>（见 README「自动采集」）。</p>
+      </div>
+
+      <div class="panel-col">
+        <h3>③ 手动触发一次</h3>
+        <p class="muted">如需立即采集（比如补当天数据），双击：</p>
+        <pre class="code-block">collector\update_daily.bat</pre>
       </div>
     </div>
   </section>
@@ -167,13 +156,11 @@
 </main>
 
 <footer class="footer">
-  数据来源：每日更新的 Excel 文件 · 本页为静态站点，无后端服务器
+  数据来源：OpenCTP 数据中心 + AkShare 自动采集 · 本页为静态站点，无后端服务器
 </footer>
 
 <!-- 本地库优先，缺失时 app.js 会回退到 CDN -->
-<script src="js/xlsx.full.min.js"></script>
 <script src="js/chart.umd.js"></script>
-<script src="js/parser.js"></script>
 <script src="js/data.js"></script>
 <script src="js/app.js"></script>
 </body>

@@ -1,7 +1,7 @@
 /**
  * app.js — 主逻辑：依赖加载、品种/合约选择、月差/价差计算与渲染
  * 数据模型（紧凑结构）：
- *   dataset.dates, dataset.products, dataset.series[P][标签][metric] = number[]
+ *   index.products + 品种文件 {dates, series[标签].close}（每品种独立日期轴）
  */
 (function () {
   'use strict';
@@ -12,10 +12,10 @@
     dataset: null,
     source: null,          // 'local' | 'remote' | 'none'
     mode: 'spread',        // 'spread' 跨品种价差 | 'calendar' 同品种月差
-    metric: 'close',       // 'close' | 'settle'
     view: 'seasonal',      // 'seasonal' 季节性图（默认）| 'time' 时序图
     rangeStart: 0,         // 时序图范围（交易日索引，含）
     rangeEnd: 0,
+    currentDates: null,    // 当前 A 品种的日期轴,
     seasonalStart: 0,      // 季节性图年内范围（MM-DD 索引，含）
     seasonalEnd: 0,
     yMin: null,            // 纵轴范围（null = 自动）
@@ -69,12 +69,11 @@
     ensureLibs(function () {
       bindEvents();
       FuturesData.loadDataset().then(function (res) {
-        state.dataset = res.dataset;
         state.source = res.source;
-        if (state.dataset) { initRange(); initSelector(); syncViewControls(); }
+        if (res.dataset) { initSelector(); syncViewControls(); }
         renderDataStatus();
-        if (res.error && !state.dataset) {
-          showStatus('err', '线上数据加载失败：' + res.error.message + '（可用下方"手动上传"导入）');
+        if (res.error) {
+          showStatus('err', '线上数据加载失败：' + res.error.message);
         }
       });
     });
@@ -87,16 +86,12 @@
     document.querySelectorAll('.view-switch .mode-btn').forEach(function (btn) {
       btn.addEventListener('click', function () { setView(btn.dataset.view); });
     });
-    $('metricSel').addEventListener('change', function () {
-      state.metric = this.value;
-      refreshResult();
-    });
     $('legAProduct').addEventListener('change', function () {
       state.legA.product = this.value;
       state.legA.contract = null;
       fillContracts('A');
       if (state.mode === 'calendar') syncCalendarLegB();
-      refreshResult();
+      refreshAsync();
     });
     $('legAContract').addEventListener('change', function () {
       state.legA.contract = this.value;
@@ -106,7 +101,7 @@
       state.legB.product = this.value;
       state.legB.contract = null;
       fillContracts('B');
-      refreshResult();
+      refreshAsync();
     });
     $('legBContract').addEventListener('change', function () {
       state.legB.contract = this.value;
@@ -122,8 +117,6 @@
     document.querySelectorAll('.range-q').forEach(function (btn) {
       btn.addEventListener('click', function () { applyQuickRange(parseInt(btn.dataset.months, 10)); });
     });
-    $('fileInput').addEventListener('change', onFileChosen);
-    $('clearLocalBtn').addEventListener('click', clearLocalData);
     $('tableLimit').addEventListener('change', renderTable);
     $('tableOrder').addEventListener('change', renderTable);
     $('showPricesChk').addEventListener('change', refreshResult);
@@ -131,7 +124,7 @@
 
   // ================= 选择器 =================
   function initSelector() {
-    var prods = FuturesData.getProducts(state.dataset);
+    var prods = FuturesData.getProducts();
     // value 用品种代码（P），显示带中文名（P · 棕榈油）
     fillSelect($('legAProduct'), prods, false, prodLabel);
     fillSelect($('legBProduct'), prods, false, prodLabel);
@@ -143,10 +136,21 @@
     fillContracts('B');
     pickDefaultContracts();
     setMode(state.mode);
+    refreshAsync();   // 异步加载 A/B 品种数据后计算
+  }
+
+  /** 异步确保 A/B 品种数据已加载，再计算渲染 */
+  function refreshAsync() {
+    FuturesData.ensureProducts([state.legA.product, state.legB.product]).then(function () {
+      refreshResult();
+      initRange();
+    }).catch(function (err) {
+      showStatus('err', '数据加载失败：' + err.message);
+    });
   }
 
   function prodLabel(code) {
-    var info = FuturesData.getProductInfo(state.dataset, code);
+    var info = FuturesData.getProductInfo(code);
     return info && info.name ? code + ' · ' + info.name : code;
   }
 
@@ -168,7 +172,7 @@
     var leg = which === 'A' ? state.legA : state.legB;
     var sel = which === 'A' ? $('legAContract') : $('legBContract');
     if (!leg.product) { sel.innerHTML = '<option value="">—</option>'; return; }
-    var info = FuturesData.getProductInfo(state.dataset, leg.product);
+    var info = FuturesData.getProductInfo(leg.product);
     var ctrs = info ? info.contracts : [];
     fillSelect(sel, ctrs, true);
     if (ctrs.length && !sel.value) sel.value = ctrs[0];
@@ -176,8 +180,8 @@
   }
 
   function pickDefaultContracts() {
-    var infoA = FuturesData.getProductInfo(state.dataset, state.legA.product);
-    var infoB = FuturesData.getProductInfo(state.dataset, state.legB.product);
+    var infoA = FuturesData.getProductInfo(state.legA.product);
+    var infoB = FuturesData.getProductInfo(state.legB.product);
     var ctrsA = infoA ? infoA.contracts : [];
     var ctrsB = infoB ? infoB.contracts : [];
     if (ctrsA.length) { state.legA.contract = ctrsA[0]; $('legAContract').value = ctrsA[0]; }
@@ -188,7 +192,7 @@
   /** 年内 MM-DD 全集（基于全部交易日，排序） */
   function seasonalAllLabels() {
     var set = {};
-    state.dataset.dates.forEach(function (d) { set[d.slice(5)] = 1; });
+    (state.currentDates || []).forEach(function (d) { set[d.slice(5)] = 1; });
     return Object.keys(set).sort();
   }
 
@@ -200,7 +204,7 @@
   }
 
   function initTimeRange() {
-    var n = state.dataset.dates.length;
+    var n = (state.currentDates || []).length;
     state.rangeStart = 0;
     state.rangeEnd = n - 1;
     setSlider($('rangeStart'), 0, n - 1, 0);
@@ -258,12 +262,13 @@
       tE = labels[state.seasonalEnd] || '—';
       $('rangeHint').textContent = '左右拉动手柄，调节季节性图显示的年内日期范围';
     } else {
-      var m = state.dataset.dates.length;
+      var dsT = state.currentDates || [];
+      var m = dsT.length;
       if (m <= 1) return;
       pctS = (state.rangeStart / (m - 1)) * 100;
       pctE = (state.rangeEnd / (m - 1)) * 100;
-      tS = state.dataset.dates[state.rangeStart] || '—';
-      tE = state.dataset.dates[state.rangeEnd] || '—';
+      tS = dsT[state.rangeStart] || '—';
+      tE = dsT[state.rangeEnd] || '—';
       $('rangeHint').textContent = '左右拉动两端手柄，调节显示的时间范围';
     }
     $('rangeWrap').style.setProperty('--s', pctS + '%');
@@ -274,8 +279,9 @@
 
   /** 按当前时间轴范围过滤价差序列（仅时序图视图使用） */
   function filterByRange(joined) {
-    var d0 = state.dataset.dates[state.rangeStart];
-    var d1 = state.dataset.dates[state.rangeEnd];
+    var dsR = state.currentDates || [];
+    var d0 = dsR[state.rangeStart];
+    var d1 = dsR[state.rangeEnd];
     if (!d0 || !d1) return joined;
     var out = [];
     for (var i = 0; i < joined.length; i++) {
@@ -288,7 +294,7 @@
   /** 时间快捷键：把范围锁定到最近 N 个月（自动切到时序图） */
   function applyQuickRange(months) {
     if (state.view !== 'time') setView('time');
-    var ds = state.dataset.dates;
+    var ds = state.currentDates || [];
     var last = ds.length - 1;
     var startDate = shiftDate(ds[last], -months);
     var i = 0;
@@ -399,7 +405,7 @@
 
   /** 月差快捷键：同品种 A 合约 − B 合约 */
   function applyCalendarShortcut(cA, cB) {
-    var info = FuturesData.getProductInfo(state.dataset, state.legA.product);
+    var info = FuturesData.getProductInfo(state.legA.product);
     var ctrs = info ? info.contracts : [];
     if (ctrs.indexOf(cA) < 0 || ctrs.indexOf(cB) < 0) {
       showStatus('warn', '当前品种没有 ' + cA + ' 或 ' + cB + ' 月合约');
@@ -412,7 +418,7 @@
 
   /** 价差快捷键：品种 A − 品种 B（默认取主力合约） */
   function applySpreadShortcut(pA, pB) {
-    if (!FuturesData.getProductInfo(state.dataset, pA) || !FuturesData.getProductInfo(state.dataset, pB)) {
+    if (!FuturesData.getProductInfo(pA) || !FuturesData.getProductInfo(pB)) {
       showStatus('warn', '数据中没有 ' + pA + ' 或 ' + pB + ' 品种');
       return;
     }
@@ -421,7 +427,7 @@
     state.legA.contract = null; state.legB.contract = null;
     fillContracts('A');
     fillContracts('B');
-    refreshResult();
+    refreshAsync();
   }
 
   /** 切换图表视图：季节性图 / 时序图 */
@@ -446,7 +452,7 @@
   function syncCalendarLegB() {
     state.legB.product = state.legA.product;
     $('legBProduct').value = state.legA.product;
-    var info = FuturesData.getProductInfo(state.dataset, state.legA.product);
+    var info = FuturesData.getProductInfo(state.legA.product);
     var ctrs = info ? info.contracts : [];
     var idx = ctrs.indexOf(state.legA.contract);
     var next = idx >= 0 && idx < ctrs.length - 1 ? ctrs[idx + 1] : null;
@@ -468,28 +474,30 @@
     fillContracts('A');
     fillContracts('B');
     if (state.mode === 'calendar') syncCalendarLegB();
-    refreshResult();
+    refreshAsync();
   }
 
   // ================= 计算与渲染 =================
   /** animate=false 时图表即时更新（无动画），用于滑块拖动 */
   function refreshResult(animate) {
-    if (!state.dataset) { clearResult(); return; }
     var a = state.legA, b = state.legB;
     if (!a.product || !a.contract || !b.product || !b.contract) { clearResult(); return; }
+    state.currentDates = FuturesData.getProductDates(a.product) || [];
+    if (!state.currentDates.length) { clearResult(); return; }
 
-    var pA = FuturesData.getPrices(state.dataset, a.product, a.contract, state.metric);
-    var pB = FuturesData.getPrices(state.dataset, b.product, b.contract, state.metric);
+    var pA = FuturesData.getPrices(a.product, a.contract);
+    var pB = FuturesData.getPrices(b.product, b.contract);
     if (!pA || !pB) {
       clearResult();
-      $('chartEmpty').textContent = '所选合约缺少「' + metricName(state.metric) + '」数据（可切换上方价格指标）';
+      $('chartEmpty').textContent = '所选合约没有数据';
       $('chartEmpty').style.display = 'flex';
       return;
     }
     updateLegPrice('A', pA);
     updateLegPrice('B', pB);
 
-    var joined = FuturesData.spreadSeries(state.dataset.dates, pA, pB);
+    var joined = FuturesData.spreadSeries(state.currentDates, pA,
+      FuturesData.getProductDates(b.product) || [], pB);
     if (state.view === 'time') joined = filterByRange(joined);
     if (!joined.length) {
       clearResult();
@@ -502,15 +510,13 @@
     var label = state.mode === 'calendar'
       ? a.product + ' ' + a.contract + '月 − ' + b.contract + '月 月差'
       : a.product + a.contract + ' − ' + b.product + b.contract + ' 价差';
-    $('resultTitle').textContent = title + '：' + label + '（' + metricName(state.metric) + '）';
+    $('resultTitle').textContent = title + '：' + label;
 
     renderSummary(FuturesData.summarize(joined), joined);
     renderChart(joined, pA, pB, label, animate);
     renderTable(joined);
     $('chartEmpty').style.display = 'none';
   }
-
-  function metricName(m) { return m === 'settle' ? '结算价' : '收盘价'; }
 
   function updateLegPrice(which, prices) {
     var el = which === 'A' ? $('legAPrice') : $('legBPrice');
@@ -757,50 +763,13 @@
     body.appendChild(frag);
   }
 
-  // ================= 数据管理 =================
-  function onFileChosen(e) {
-    var f = e.target.files[0];
-    if (!f) return;
-    setProgress('正在解析 ' + f.name + ' …');
-    FuturesParser.parseFile(f).then(function (ds) {
-      if (!ds.dates.length) { setProgress('未解析出数据'); return; }
-      if (FuturesData.saveLocal(ds)) {
-        setProgress('已导入 ' + ds.dates.length + ' 个交易日 · ' +
-          Object.keys(ds.products).length + ' 个品种（' + ds.fileName + '）');
-        reloadData();
-      } else {
-        showStatus('err', '浏览器存储空间不足，导入失败');
-      }
-    }).catch(function (err) {
-      setProgress('解析失败：' + err.message);
-      showStatus('err', 'Excel 解析失败：' + err.message);
-    });
-  }
-
-  function clearLocalData() {
-    FuturesData.clearLocal();
-    reloadData('已清除本地数据');
-  }
-
-  function reloadData(msg) {
-    FuturesData.loadDataset().then(function (res) {
-      state.dataset = res.dataset;
-      state.source = res.source;
-      if (state.dataset) initSelector(); else clearResult();
-      renderDataStatus();
-      if (msg) showStatus('ok', msg);
-    });
-  }
-
   // ================= 状态显示 =================
   function renderDataStatus() {
     var list = $('statusList');
     list.innerHTML = '';
-    var d = FuturesData.describe(state.dataset);
+    var d = FuturesData.describe();
     var lines = [];
-    if (state.source === 'local') lines.push(['当前数据源', '本机上传（localStorage）']);
-    else if (state.source === 'remote') lines.push(['当前数据源', '线上 data.json（每日更新）']);
-    else lines.push(['当前数据源', '无数据']);
+    lines.push(['数据源', 'OpenCTP + AkShare 自动采集']);
     lines.push(['更新时间', d && d.updated_at ? d.updated_at : '—']);
     lines.push(['交易日数量', d ? String(d.days) : '—']);
     lines.push(['品种数量', d ? String(d.products) : '—']);
@@ -814,17 +783,14 @@
 
     var dot = $('dataDot');
     var text = $('dataStatusText');
-    if (state.source === 'local') { dot.className = 'dot ok'; text.textContent = '本机数据（上传）'; }
-    else if (state.source === 'remote') { dot.className = 'dot ok'; text.textContent = '线上数据 · ' + (d && d.lastDate || ''); }
-    else { dot.className = 'dot err'; text.textContent = '无数据，请上传 Excel'; }
+    if (d && d.days) { dot.className = 'dot ok'; text.textContent = '自动采集 · ' + (d.lastDate || ''); }
+    else { dot.className = 'dot err'; text.textContent = '无数据'; }
   }
 
   function showStatus(kind, msg) {
     $('dataDot').className = 'dot ' + (kind === 'err' ? 'err' : kind === 'warn' ? 'warn' : 'ok');
     $('dataStatusText').textContent = msg;
   }
-
-  function setProgress(msg) { $('uploadProgress').textContent = msg; }
 
   // ================= 工具 =================
   function fmtNum(n) {

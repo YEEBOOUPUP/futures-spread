@@ -1,38 +1,32 @@
 /**
- * data.js — 数据加载与价差/月差计算（紧凑结构：dates/series 按索引对齐）
- *
- * 数据来源优先级：
- *   1. localStorage（浏览器上传解析，本机可见）
- *   2. data/data.json（每日转换脚本生成，随站点部署，全站可见）
+ * data.js — 数据加载与价差/月差计算（v2：按品种拆分 + 懒加载）
  *
  * 数据结构：
- *   { dates: ["2015-01-05",...],
- *     products: { "P": { name, contracts:[标签], metrics:[close,settle] } },
- *     series: { "P": { "主力": { close:[5006,...] }, "01": { close:[...], settle:[...] } } } }
+ *   data/index.json（元数据 + 全局日期轴）：
+ *     { updated_at, source, dates: [...], products: { "P": { name, contracts, metrics, file } } }
+ *   data/{品种}.json（单品种，series 与全局 dates 按索引对齐）：
+ *     { series: { "01": { close: [...], settle: [...] } } }
  *
- * 计算：
- *   getPrices(dataset, product, label, metric) → number[]（与 dates 对齐，缺失为 null）
- *   spreadSeries(dates, a, b)                 → [{date,a,b,spread}] 按共同有效交易日
+ * 前端按需加载品种文件（懒加载 + 内存缓存），避免全市场数据一次性拉取。
  */
 (function (global) {
   'use strict';
 
-  var STORAGE_KEY = 'futures_spread_dataset_v1';
+  var indexData = null;   // index.json 内容
+  var cache = {};         // 品种代码 -> { series: {...} }
+  var loading = {};       // 加载中的 Promise 去重
 
   function loadDataset() {
     return new Promise(function (resolve) {
-      var local = loadLocal();
-      if (local) {
-        resolve({ dataset: local, source: 'local' });
-        return;
-      }
-      fetch('data/data.json', { cache: 'no-cache' })
+      fetch('data/index.json', { cache: 'no-cache' })
         .then(function (res) {
           if (!res.ok) throw new Error('HTTP ' + res.status);
           return res.json();
         })
         .then(function (json) {
-          if (!json || !json.dates || !json.series) throw new Error('data.json 结构无效');
+          if (!json || !json.dates || !json.products) throw new Error('index.json 结构无效');
+          indexData = json;
+          cache = {};
           resolve({ dataset: json, source: 'remote' });
         })
         .catch(function (err) {
@@ -41,48 +35,71 @@
     });
   }
 
-  function saveLocal(dataset) {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(dataset)); return true; }
-    catch (e) { return false; }
-  }
-  function loadLocal() {
-    try {
-      var raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return null;
-      var ds = JSON.parse(raw);
-      if (!ds || !ds.dates || !ds.series) return null;
-      return ds;
-    } catch (e) { return null; }
-  }
-  function clearLocal() {
-    try { localStorage.removeItem(STORAGE_KEY); } catch (e) { /* ignore */ }
-  }
-
-  function getProducts(dataset) {
-    if (!dataset || !dataset.products) return [];
-    return Object.keys(dataset.products).sort();
-  }
-
-  function getProductInfo(dataset, product) {
-    return (dataset && dataset.products && dataset.products[product]) || null;
+  /** 确保指定品种数据已加载（懒加载 + 缓存） */
+  function ensureProducts(codes) {
+    var pending = [];
+    (codes || []).forEach(function (code) {
+      if (!code || cache[code]) return;
+      if (!loading[code]) {
+        var info = indexData.products[code];
+        var file = info && info.file ? info.file : code + '.json';
+        loading[code] = fetch('data/' + file, { cache: 'no-cache' })
+          .then(function (res) {
+            if (!res.ok) throw new Error('加载 ' + code + ' 失败: HTTP ' + res.status);
+            return res.json();
+          })
+          .then(function (js) {
+            cache[code] = js;
+            return js;
+          })
+          .finally(function () { delete loading[code]; });
+      }
+      pending.push(loading[code]);
+    });
+    return Promise.all(pending);
   }
 
-  /** 价格数组（与 dates 对齐；无该指标或该合约 → null） */
-  function getPrices(dataset, product, label, metric) {
-    if (!dataset || !dataset.series || !dataset.series[product]) return null;
-    var m = dataset.series[product][label];
+  function isLoaded(code) { return !!cache[code]; }
+
+  function getProducts() {
+    return indexData ? Object.keys(indexData.products).sort() : [];
+  }
+
+  function getProductInfo(code) {
+    return (indexData && indexData.products[code]) || null;
+  }
+
+  function getDates() { return indexData ? indexData.dates : []; }
+
+  /** 某品种的日期轴（独立 dates） */
+  function getProductDates(code) {
+    var p = cache[code];
+    return (p && p.dates) ? p.dates : null;
+  }
+
+  /** 价格数组（与品种自己的 dates 对齐；无该合约/指标 → null） */
+  function getPrices(product, label, metric) {
+    var p = cache[product];
+    if (!p || !p.series) return null;
+    var m = p.series[label];
     if (!m) return null;
     return (m[metric || 'close'] != null) ? m[metric || 'close'] : null;
   }
 
-  /** 两条价格数组 → 按日期对齐的价差序列（跳过任一侧缺失的日子） */
-  function spreadSeries(dates, pricesA, pricesB) {
-    var n = Math.min(dates.length, pricesA ? pricesA.length : 0, pricesB ? pricesB.length : 0);
-    var out = [];
-    for (var i = 0; i < n; i++) {
-      var a = pricesA[i], b = pricesB[i];
-      if (a == null || b == null) continue;
-      out.push({ date: dates[i], a: a, b: b, spread: round2(a - b) });
+  /** 两条序列（各自日期轴）按共同交易日对齐 → [{date,a,b,spread}] */
+  function spreadSeries(datesA, pricesA, datesB, pricesB) {
+    if (!datesA || !datesB || !pricesA || !pricesB) return [];
+    var i = 0, j = 0, out = [];
+    while (i < datesA.length && j < datesB.length) {
+      if (datesA[i] < datesB[j]) { i++; }
+      else if (datesA[i] > datesB[j]) { j++; }
+      else {
+        var a = pricesA[i], b = pricesB[j];
+        if (a != null && b != null) {
+          out.push({ date: datesA[i], a: a, b: b, spread: round2(a - b) });
+        }
+        i++; j++;
+      }
     }
     return out;
   }
@@ -110,16 +127,15 @@
     };
   }
 
-  /** 数据状态报告 */
-  function describe(dataset) {
-    if (!dataset || !dataset.dates) return null;
+  function describe() {
+    if (!indexData) return null;
     return {
-      days: dataset.dates.length,
-      products: dataset.products ? Object.keys(dataset.products).length : 0,
-      firstDate: dataset.dates[0] || null,
-      lastDate: dataset.dates[dataset.dates.length - 1] || null,
-      updated_at: dataset.updated_at || null,
-      source: dataset.source || null
+      days: indexData.dates.length,
+      products: indexData.products ? Object.keys(indexData.products).length : 0,
+      firstDate: indexData.dates[0] || null,
+      lastDate: indexData.dates[indexData.dates.length - 1] || null,
+      updated_at: indexData.updated_at || null,
+      source: indexData.source || null
     };
   }
 
@@ -127,10 +143,12 @@
 
   global.FuturesData = {
     loadDataset: loadDataset,
-    saveLocal: saveLocal,
-    clearLocal: clearLocal,
+    ensureProducts: ensureProducts,
+    isLoaded: isLoaded,
     getProducts: getProducts,
     getProductInfo: getProductInfo,
+    getDates: getDates,
+    getProductDates: getProductDates,
     getPrices: getPrices,
     spreadSeries: spreadSeries,
     summarize: summarize,
