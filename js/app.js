@@ -249,7 +249,7 @@
       activeIdx = -1;
       onChange(it.code);
     }
-    input.addEventListener('focus', function () { render(input.value); });
+    input.addEventListener('focus', function () { render(''); });
     input.addEventListener('input', function () { activeIdx = -1; render(input.value); });
     input.addEventListener('keydown', function (e) {
       if (e.key === 'ArrowDown') { e.preventDefault(); setActive(activeIdx + 1); }
