@@ -21,6 +21,8 @@
     yMin: null,            // 纵轴范围（null = 自动）
     yMax: null,
     hiddenYears: {},       // 季节性图用户在图例上隐藏的年份 { "2020": true }
+    yearMin: null,         // 季节性图年份范围（null = 全部）
+    yearMax: null,
     pickerA: null,         // 品种搜索组件实例
     pickerB: null,
     legA: { product: null, contract: null },
@@ -109,6 +111,9 @@
     $('tableLimit').addEventListener('change', renderTable);
     $('tableOrder').addEventListener('change', renderTable);
     $('showPricesChk').addEventListener('change', refreshResult);
+    $('yearMin').addEventListener('input', onYearRangeInput);
+    $('yearMax').addEventListener('input', onYearRangeInput);
+    $('yearResetBtn').addEventListener('click', resetYearRange);
   }
 
   // ================= 选择器 =================
@@ -575,12 +580,13 @@
     refreshResult();
   }
 
-  /** 季节性图只画价差线，禁用"叠加价格线"复选框；时间快捷键仅时序图可见 */
+  /** 季节性图只画价差线，禁用"叠加价格线"复选框；时间快捷键仅时序图可见；年份滑轨仅季节性图 */
   function syncViewControls() {
     var chk = $('showPricesChk');
     chk.disabled = state.view === 'seasonal';
     $('pricesChkLabel').classList.toggle('disabled', state.view === 'seasonal');
     $('rangeQuickBtns').style.display = state.view === 'time' ? 'flex' : 'none';
+    $('yearRangeControl').style.display = state.view === 'seasonal' ? '' : 'none';
   }
 
   function syncCalendarLegB() {
@@ -793,6 +799,10 @@
       byYear[y][md] = r.spread;           // 同一天一条记录（日频）
     });
     var years = Object.keys(byYear).sort();
+    // 年份范围过滤（滑轨）：只画范围内的年份
+    if (state.yearMin != null) years = years.filter(function (y) { return +y >= state.yearMin; });
+    if (state.yearMax != null) years = years.filter(function (y) { return +y <= state.yearMax; });
+    initYearRange(Object.keys(byYear).sort());   // 更新年份滑轨范围（保留当前选择）
 
     var datasets = years.map(function (y, i) {
       var isLatest = i === years.length - 1;   // 最新年份红色加粗高亮
@@ -872,10 +882,67 @@
     legend.chart.update();
   }
 
-  /** 为年份分配均匀分布的 HSL 颜色 */
+  /** 为年份分配颜色：黄金角步进（137.5°），相邻年份色相差最大，年份多时辨识度依然高 */
   function yearColor(i, n) {
-    var hue = Math.round((i * 360) / Math.max(n, 1) + 15) % 360;
+    var hue = Math.round((i * 137.508 + 15) % 360);
     return 'hsl(' + hue + ', 62%, 42%)';
+  }
+
+  /** 年份范围滑轨：初始化 min/max（数据实际年份），保留用户当前选择并夹紧 */
+  function initYearRange(years) {
+    if (!years || !years.length) return;
+    var nums = years.map(Number).sort(function (a, b) { return a - b; });
+    var mn = nums[0], mx = nums[nums.length - 1];
+    var yMin = $('yearMin'), yMax = $('yearMax');
+    yMin.min = yMax.min = mn;
+    yMin.max = yMax.max = mx;
+    if (state.yearMin == null || state.yearMin < mn) state.yearMin = mn;
+    if (state.yearMax == null || state.yearMax > mx) state.yearMax = mx;
+    if (state.yearMin > mx) state.yearMin = mx;
+    if (state.yearMax < mn) state.yearMax = mn;
+    yMin.value = state.yearMin;
+    yMax.value = state.yearMax;
+    updateYearRangeBar();
+  }
+
+  /** 更新年份滑轨的高亮区间与文本 */
+  function updateYearRangeBar() {
+    var yMin = $('yearMin'), yMax = $('yearMax');
+    var mn = +yMin.min, mx = +yMax.max;
+    var span = (mx - mn) || 1;
+    var s = Math.round(((state.yearMin - mn) / span) * 100);
+    var e = Math.round(((state.yearMax - mn) / span) * 100);
+    $('yearRangeWrap').style.setProperty('--s', s + '%');
+    $('yearRangeWrap').style.setProperty('--e', e + '%');
+    $('yearRangeText').textContent = state.yearMin + ' ~ ' + state.yearMax + ' 年';
+  }
+
+  /** 年份滑轨拖动（节流：每帧最多一次重绘） */
+  function onYearRangeInput() {
+    var vMin = parseInt($('yearMin').value, 10);
+    var vMax = parseInt($('yearMax').value, 10);
+    if (vMin > vMax) {                       // 交叉时跟随：保持左 ≤ 右
+      if (this.id === 'yearMin') { $('yearMax').value = vMin; vMax = vMin; }
+      else { $('yearMin').value = vMax; vMin = vMax; }
+    }
+    state.yearMin = vMin;
+    state.yearMax = vMax;
+    updateYearRangeBar();
+    if (!rafPending) {
+      rafPending = true;
+      requestAnimationFrame(function () { rafPending = false; refreshResult(); });
+    }
+  }
+
+  /** 年份滑轨重置到全部 */
+  function resetYearRange() {
+    var yMin = $('yearMin'), yMax = $('yearMax');
+    state.yearMin = +yMin.min;
+    state.yearMax = +yMax.max;
+    yMin.value = state.yearMin;
+    yMax.value = state.yearMax;
+    updateYearRangeBar();
+    refreshResult();
   }
 
   function renderTable(joined) {

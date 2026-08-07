@@ -341,3 +341,13 @@ select:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent
   .operator { text-align: center; padding: 0; }
   .chart-wrap { height: 260px; }
 }
+
+/* ---------- 年份范围滑轨（季节性图图例上方） ---------- */
+.year-range { margin: 0 0 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: #fafafa; }
+.year-range-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.year-range-label { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.year-range-text { font-size: 12px; color: var(--accent); font-weight: 600; }
+#yearMin { z-index: 1; }
+#yearMax { z-index: 2; }
+#yearMax::-webkit-slider-thumb { background: #f97316; }
+#yearMax::-moz-range-thumb { background: #f97316; }

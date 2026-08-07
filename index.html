@@ -90,6 +90,18 @@
 
     <div class="summary-grid" id="summaryGrid"></div>
 
+    <div class="year-range" id="yearRangeControl" style="display:none">
+      <div class="year-range-head">
+        <span class="year-range-label">年份范围</span>
+        <span class="year-range-text" id="yearRangeText">—</span>
+        <button class="range-reset" id="yearResetBtn" title="恢复全部年份">↺ 全部</button>
+      </div>
+      <div class="range-wrap" id="yearRangeWrap">
+        <input type="range" id="yearMin" min="0" max="0" value="0">
+        <input type="range" id="yearMax" min="0" max="0" value="0">
+      </div>
+    </div>
+
     <div class="chart-wrap">
       <canvas id="spreadChart"></canvas>
       <div class="chart-empty" id="chartEmpty">请选择品种与合约</div>
