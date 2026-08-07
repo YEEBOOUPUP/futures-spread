@@ -110,7 +110,7 @@ python -m http.server 8000 --directory futures-spread
 - 来源：您的 Excel（`油脂油料数据库.xlsx` → "国外油脂期货" sheet）
   - 马棕（F_FCPO）：A~N 列，主力 + 01~12 月连续合约，2005 年起
   - 美豆油（F_BO）：AE~AO 列，主力 + 最近 + 01/03/05/07/08/09/10/12 月，2000 年起
-- **每日更新**：更新完 Excel 后双击 `collector/update_foreign.bat`（自动导入 → 推送 → 网站 1-3 分钟更新）
+- **每日更新**：更新完 Excel 后双击 `collector/update_excel.bat`（一键导入马棕/美豆油/加菜籽/欧菜籽 → 自动推送 → 网站 1-3 分钟更新；桌面有快捷方式期货数据更新）
 - 注：月份合约数据一般比主力晚一天（手动维护），属正常
 
 ## 核心品种历史恢复

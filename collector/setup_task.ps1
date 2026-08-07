@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-"""
-setup_task.ps1 — 注册 Windows 计划任务：每个交易日 16:00 自动采集并推送
-用法：powershell -ExecutionPolicy Bypass -File collector\setup_task.ps1
-"""
+﻿# -*- coding: utf-8 -*-
+# 注册 Windows 计划任务：每个交易日 16:00 自动采集并推送
+# 用法：powershell -ExecutionPolicy Bypass -File collector\setup_task.ps1
 $bat = Join-Path $PSScriptRoot 'update_daily.bat'
 schtasks /create /tn "FuturesSpreadDailyUpdate" /tr "`"$bat`"" /sc daily /st 16:00 /f
 
