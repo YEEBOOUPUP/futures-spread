@@ -104,6 +104,24 @@
     return out;
   }
 
+  /** 比值序列（油粕比等）：a / b，按日期对齐 */
+  function ratioSeries(datesA, pricesA, datesB, pricesB) {
+    if (!datesA || !datesB || !pricesA || !pricesB) return [];
+    var i = 0, j = 0, out = [];
+    while (i < datesA.length && j < datesB.length) {
+      if (datesA[i] < datesB[j]) { i++; }
+      else if (datesA[i] > datesB[j]) { j++; }
+      else {
+        var a = pricesA[i], b = pricesB[j];
+        if (a != null && b != null && b !== 0) {
+          out.push({ date: datesA[i], a: a, b: b, spread: round2(a / b) });
+        }
+        i++; j++;
+      }
+    }
+    return out;
+  }
+
   function summarize(joined) {
     if (!joined || !joined.length) return null;
     var vals = joined.map(function (r) { return r.spread; });
@@ -148,6 +166,7 @@
     getProductDates: getProductDates,
     getPrices: getPrices,
     spreadSeries: spreadSeries,
+    ratioSeries: ratioSeries,
     summarize: summarize,
     describe: describe
   };

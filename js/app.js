@@ -137,6 +137,22 @@
     'ZN': '锌'
   };
 
+  /** 品种板块分类（搜索下拉分组） */
+  var SECTORS = [
+    { name: '黑色金属', codes: ['RB', 'HC', 'I', 'J', 'JM', 'SF', 'SM', 'WR', 'ZC'] },
+    { name: '有色金属', codes: ['CU', 'AL', 'ZN', 'PB', 'NI', 'SN', 'AU', 'AG', 'SS', 'BC', 'LC', 'SI', 'AO', 'PD', 'PT'] },
+    { name: '农产品', codes: ['A', 'B', 'M', 'Y', 'P', 'OI', 'RM', 'RS', 'C', 'CS', 'JD', 'LH', 'AP', 'CJ', 'PK', 'CF', 'CY', 'SR', 'JR', 'RI', 'RR', 'WH', 'PM', 'AD', 'LG', 'RS_CAN', 'RS_EU'] },
+    { name: '能源化工', codes: ['SC', 'FU', 'LU', 'BU', 'TA', 'MA', 'EG', 'EB', 'PP', 'L', 'V', 'PG', 'PF', 'PR', 'PX', 'BZ', 'UR', 'SA', 'FG', 'SH', 'BR', 'RU', 'NR', 'SP', 'PS', 'PL'] },
+    { name: '金融', codes: ['IF', 'IC', 'IH', 'IM', 'T', 'TF', 'TS', 'TL'] },
+    { name: '海外', codes: ['F_BO', 'F_FCPO'] }
+  ];
+  function sectorOf(code) {
+    for (var i = 0; i < SECTORS.length; i++) {
+      if (SECTORS[i].codes.indexOf(code) >= 0) return SECTORS[i].name;
+    }
+    return '其他';
+  }
+
   function initSelector() {
     var prods = FuturesData.getProducts();
     if (!prods.length) { showStatus('warn', '数据中没有任何品种'); return; }
@@ -190,7 +206,7 @@
     var list = $(listId);
     var items = FuturesData.getProducts().map(function (code) {
       var info = FuturesData.getProductInfo(code);
-      return { code: code, label: prodLabel(code), foreign: !!(info && info.foreign) };
+      return { code: code, label: prodLabel(code), foreign: !!(info && info.foreign), sector: sectorOf(code) };
     });
     var activeIdx = -1;
     var flat = [];
@@ -204,12 +220,15 @@
     }
     function render(keyword) {
       var arr = visible(keyword);
-      var dom = arr.filter(function (x) { return !x.foreign; });
-      var fgn = arr.filter(function (x) { return x.foreign; });
       list.innerHTML = '';
       flat = [];
-      if (dom.length) addGroup('国内品种', dom);
-      if (fgn.length) addGroup('海外品种', fgn);
+      var shown = {};
+      SECTORS.forEach(function (sec) {
+        var items2 = arr.filter(function (x) { return x.sector === sec.name; });
+        if (items2.length) { addGroup(sec.name, items2); shown[sec.name] = 1; }
+      });
+      var rest = arr.filter(function (x) { return !shown[x.sector]; });
+      if (rest.length) addGroup('其他', rest);
       if (!flat.length) {
         var li = document.createElement('li');
         li.className = 'no-result';
@@ -219,10 +238,14 @@
       list.classList.add('open');
     }
     function addGroup(title, groupItems) {
-      var h = document.createElement('li');
-      h.className = 'group-title';
+      var sec = document.createElement('div');
+      sec.className = 'sector';
+      var h = document.createElement('div');
+      h.className = 'sector-title';
       h.textContent = title + '（' + groupItems.length + '）';
-      list.appendChild(h);
+      sec.appendChild(h);
+      var ul = document.createElement('ul');
+      ul.className = 'sector-items';
       groupItems.forEach(function (it) {
         flat.push(it);
         var idx = flat.length - 1;
@@ -238,8 +261,10 @@
         li.appendChild(nm);
         li.addEventListener('mousedown', function (e) { e.preventDefault(); select(it); });
         li.addEventListener('mouseenter', function () { setActive(idx); });
-        list.appendChild(li);
+        ul.appendChild(li);
       });
+      sec.appendChild(ul);
+      list.appendChild(sec);
     }
     function setActive(i) {
       activeIdx = i;
@@ -307,6 +332,9 @@
     if (keep && values.indexOf(prev) >= 0) sel.value = prev;
   }
 
+  /** 油粕比模式的合约月份（用户指定 1357911） */
+  var RATIO_MONTHS = ['01', '03', '05', '07', '09', '11'];
+
   /** 填充合约下拉（标签列表：主力/最近/01...） */
   function fillContracts(which) {
     var leg = which === 'A' ? state.legA : state.legB;
@@ -314,6 +342,9 @@
     if (!leg.product) { sel.innerHTML = '<option value="">—</option>'; return; }
     var info = FuturesData.getProductInfo(leg.product);
     var ctrs = info ? info.contracts : [];
+    if (state.mode === 'ratio') {
+      ctrs = ctrs.filter(function (c) { return RATIO_MONTHS.indexOf(c) >= 0; });
+    }
     fillSelect(sel, ctrs, true);
     if (ctrs.length && !sel.value) sel.value = ctrs[0];
     leg.contract = sel.value || null;
@@ -352,7 +383,7 @@
   }
 
   function initSeasonalRange() {
-    var labels = seasonalAllLabels();
+    var labels = state.mode === 'calendar' && calendarSeasonalMeta() ? calendarSeasonalMeta().labels : seasonalAllLabels();
     var n = labels.length;
     state.seasonalStart = 0;
     state.seasonalEnd = n - 1;
@@ -502,10 +533,17 @@
       if (state.pickerB) state.pickerB.setDisabled(true);
       syncCalendarLegB();
       $('legHint').textContent = '月差 = 同一品种的合约 A − 合约 B（如 P 01月 − 05月），可点 ⇄ 交换方向';
+    } else if (mode === 'ratio') {
+      if (state.pickerB) state.pickerB.setDisabled(false);
+      $('legHint').textContent = '油粕比 = 油脂 A ÷ 粕类 B（A 选 P/Y/OI，B 选 M/RM），月份合约 01/03/05/07/09/11';
+      fillContracts('A');
+      fillContracts('B');
     } else {
       if (state.pickerB) state.pickerB.setDisabled(false);
       $('legHint').textContent = '价差 = 品种 A 合约 − 品种 B 合约（可跨品种任意组合，点 ⇄ 交换方向）';
     }
+    var op = document.querySelector('.operator');
+    if (op) op.textContent = mode === 'ratio' ? '÷' : '−';
     renderShortcuts();
     refreshResult();
   }
@@ -520,6 +558,15 @@
         { text: '91 月差', title: '09 − 01', args: ['09', '01'] },
         { text: '15 月差', title: '01 − 05', args: ['01', '05'] },
         { text: '59 月差', title: '05 − 09', args: ['05', '09'] }
+      ];
+    } else if (state.mode === 'ratio') {
+      items = [
+        { text: '棕油/豆粕', title: 'P ÷ M', args: ['P', 'M'] },
+        { text: '棕油/菜粕', title: 'P ÷ RM', args: ['P', 'RM'] },
+        { text: '豆油/豆粕', title: 'Y ÷ M', args: ['Y', 'M'] },
+        { text: '豆油/菜粕', title: 'Y ÷ RM', args: ['Y', 'RM'] },
+        { text: '菜油/豆粕', title: 'OI ÷ M', args: ['OI', 'M'] },
+        { text: '菜油/菜粕', title: 'OI ÷ RM', args: ['OI', 'RM'] }
       ];
     } else {
       items = [
@@ -587,6 +634,8 @@
     $('pricesChkLabel').classList.toggle('disabled', state.view === 'seasonal');
     $('rangeQuickBtns').style.display = state.view === 'time' ? 'flex' : 'none';
     $('yearRangeControl').style.display = state.view === 'seasonal' ? '' : 'none';
+    // 月差季节性图的横轴为固定合约周期，隐藏年内范围滑块
+    $('rangeControl').style.display = (state.view === 'seasonal' && state.mode === 'calendar') ? 'none' : '';
   }
 
   function syncCalendarLegB() {
@@ -644,8 +693,14 @@
     updateLegPrice('A', pA);
     updateLegPrice('B', pB);
 
-    var joined = FuturesData.spreadSeries(state.currentDates, pA,
-      FuturesData.getProductDates(b.product) || [], pB);
+    var joined;
+    if (state.mode === 'ratio') {
+      joined = FuturesData.ratioSeries(state.currentDates, pA,
+        FuturesData.getProductDates(b.product) || [], pB);
+    } else {
+      joined = FuturesData.spreadSeries(state.currentDates, pA,
+        FuturesData.getProductDates(b.product) || [], pB);
+    }
     if (state.view === 'time') joined = filterByRange(joined);
     if (!joined.length) {
       clearResult();
@@ -654,10 +709,15 @@
       return;
     }
 
-    var title = state.mode === 'calendar' ? '月差走势' : '价差走势';
-    var label = state.mode === 'calendar'
-      ? a.product + ' ' + a.contract + '月 − ' + b.contract + '月 月差'
-      : a.product + a.contract + ' − ' + b.product + b.contract + ' 价差';
+    var title = state.mode === 'calendar' ? '月差走势' : (state.mode === 'ratio' ? '油粕比走势' : '价差走势');
+    var label;
+    if (state.mode === 'calendar') {
+      label = a.product + ' ' + a.contract + '月 − ' + b.contract + '月 月差';
+    } else if (state.mode === 'ratio') {
+      label = a.product + ' ÷ ' + b.product + '（' + a.contract + '月合约）油粕比';
+    } else {
+      label = a.product + a.contract + ' − ' + b.product + b.contract + ' 价差';
+    }
     $('resultTitle').textContent = title + '：' + label;
 
     renderSummary(FuturesData.summarize(joined), joined);
@@ -763,7 +823,8 @@
               label: function (ctx) {
                 var d = joined[ctx.dataIndex];
                 if (ctx.datasetIndex === 0) {
-                  return ' 价差 = ' + fmtNum(d.spread) + '  （A ' + fmtNum(d.a) + ' − B ' + fmtNum(d.b) + '）';
+                  var opTxt = state.mode === 'ratio' ? '比值 = ' : '价差 = ';
+                  return ' ' + opTxt + fmtNum(d.spread) + '  （A ' + fmtNum(d.a) + ' − B ' + fmtNum(d.b) + '）';
                 }
                 return ' ' + ctx.dataset.label + ' = ' + fmtNum(ctx.parsed.y);
               }
@@ -783,21 +844,87 @@
    * 季节性图（日度）：横轴 = 一年内的日期（MM-DD），每一年一条线，每个交易日一个点；
    * 线段连续（spanGaps 跨过节假日）；图例点击年份即可隐藏/显示
    */
-  function renderSeasonalChart(joined, label, animate) {
-    // 横轴：年内 MM-DD 全集，按滑块范围截取
-    var allLabels = seasonalAllLabels();
-    var labels = allLabels.slice(state.seasonalStart, state.seasonalEnd + 1);
-    var labelSet = {};
-    labels.forEach(function (l) { labelSet[l] = 1; });
+  /** 月差季节性图：合约周期横轴与合约年度（2020 闰年 366 天映射） */
+  var MD_MONTH_DAYS = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  var MD_DAY_START = [1, 32, 61, 92, 122, 153, 183, 214, 245, 275, 306, 336]; // 每月 1 日（1-based）
+  function mdToDay(md) {                 // 'MM-DD' → 0..365（0 = 01-01）
+    var m = +md.slice(0, 2), d = +md.slice(3);
+    return MD_DAY_START[m - 1] + d - 2;
+  }
+  function dayToMD(day) {                // 0..365 → 'MM-DD'
+    var d = day;
+    for (var m = 0; m < 12; m++) {
+      if (d < MD_MONTH_DAYS[m]) break;
+      d -= MD_MONTH_DAYS[m];
+    }
+    return (m + 1 < 10 ? '0' : '') + (m + 1) + '-' + (d < 9 ? '0' : '') + (d + 1);
+  }
+  function month15(m) { return (m < 10 ? '0' : '') + m + '-15'; }
+  /** 月差合约周期：横轴 = [后交割月15日(上一合约年度), 先交割月15日]；图例 = 先交割月交割年 */
+  function calendarSeasonalMeta() {
+    var cA = state.legA.contract, cB = state.legB.contract;
+    if (!/^\d{2}$/.test(cA) || !/^\d{2}$/.test(cB) || cA === cB) return null; // 主力/最近或同月 → 自然年
+    var a = +cA, b = +cB;
+    var now = new Date();
+    var nm = now.getMonth() + 1, nd = now.getDate();
+    function nextYear(m) { return now.getFullYear() + ((m < nm || (m === nm && nd > 15)) ? 1 : 0); }
+    var ya = nextYear(a), yb = nextYear(b);
+    var firstM, lastM;                  // firstM = 先交割月、lastM = 后交割月
+    if (ya < yb || (ya === yb && a < b)) { firstM = a; lastM = b; }
+    else { firstM = b; lastM = a; }
+    var startDay = mdToDay(month15(lastM));
+    var endDay = mdToDay(month15(firstM));
+    var labels = [];
+    var d = startDay;
+    while (true) {
+      labels.push(dayToMD(d));
+      if (d === endDay) break;
+      d = (d + 1) % 366;
+    }
+    function posOf(dateStr) {
+      var pos = (mdToDay(dateStr.slice(5)) - startDay + 366) % 366;
+      return pos < labels.length ? pos : -1;
+    }
+    function yearOf(dateStr) {          // 合约年度 = 先交割月 nextYear
+      var y = +dateStr.slice(0, 4), m = +dateStr.slice(5, 7), dd = +dateStr.slice(8, 10);
+      return y + ((m > firstM || (m === firstM && dd > 15)) ? 1 : 0);
+    }
+    return {
+      labels: labels,
+      posOf: posOf,
+      yearOf: yearOf,
+      rangeLabel: month15(lastM) + ' ~ ' + month15(firstM)
+    };
+  }
 
-    var byYear = {};
-    joined.forEach(function (r) {
-      var md = r.date.slice(5);
-      if (!labelSet[md]) return;          // 跳过滑块范围外的日期
-      var y = r.date.slice(0, 4);
-      if (!byYear[y]) byYear[y] = {};
-      byYear[y][md] = r.spread;           // 同一天一条记录（日频）
-    });
+  function renderSeasonalChart(joined, label, animate) {
+    var cal = state.mode === 'calendar' ? calendarSeasonalMeta() : null;
+    var labels, byYear;
+    if (cal) {
+      labels = cal.labels;              // 合约周期横轴（跨年循环 MM-DD）
+      byYear = {};
+      joined.forEach(function (r) {
+        var pos = cal.posOf(r.date);
+        if (pos < 0) return;
+        var y = String(cal.yearOf(r.date));
+        if (!byYear[y]) byYear[y] = {};
+        byYear[y][pos] = r.spread;
+      });
+    } else {
+      // 横轴：年内 MM-DD 全集，按滑块范围截取
+      var allLabels = seasonalAllLabels();
+      labels = allLabels.slice(state.seasonalStart, state.seasonalEnd + 1);
+      var labelSet = {};
+      labels.forEach(function (l) { labelSet[l] = 1; });
+      byYear = {};
+      joined.forEach(function (r) {
+        var md = r.date.slice(5);
+        if (!labelSet[md]) return;      // 跳过滑块范围外的日期
+        var y = r.date.slice(0, 4);
+        if (!byYear[y]) byYear[y] = {};
+        byYear[y][md] = r.spread;       // 同一天一条记录（日频）
+      });
+    }
     var years = Object.keys(byYear).sort();
     // 年份范围过滤（滑轨）：只画范围内的年份
     if (state.yearMin != null) years = years.filter(function (y) { return +y >= state.yearMin; });
@@ -808,7 +935,10 @@
       var isLatest = i === years.length - 1;   // 最新年份红色加粗高亮
       return {
         label: y + '年',
-        data: labels.map(function (md) { return byYear[y][md] == null ? null : byYear[y][md]; }),
+        data: labels.map(function (md, pos) {
+          return cal ? (byYear[y][pos] == null ? null : byYear[y][pos])
+                     : (byYear[y][md] == null ? null : byYear[y][md]);
+        }),
         borderColor: isLatest ? '#dc2626' : yearColor(i, years.length),
         backgroundColor: isLatest ? 'rgba(220, 38, 38, .05)' : 'transparent',
         pointRadius: 0,
@@ -835,14 +965,14 @@
           tooltip: {
             callbacks: {
               label: function (ctx) {
-                return ' ' + ctx.dataset.label + ' ' + ctx.label + ' 价差 = ' + fmtNum(ctx.parsed.y);
+                return ' ' + ctx.dataset.label + ' ' + ctx.label + ' ' + (state.mode === 'ratio' ? '比值 = ' : '价差 = ') + fmtNum(ctx.parsed.y);
               }
             }
           }
         },
         scales: {
           x: {
-            title: { display: true, text: '日期（年内，MM-DD）', font: { size: 11 } },
+            title: { display: true, text: cal ? ('合约周期：' + cal.rangeLabel) : '日期（年内，MM-DD）', font: { size: 11 } },
             ticks: { maxTicksLimit: 12, maxRotation: 0, autoSkip: true },
             grid: { display: false }
           },
