@@ -424,14 +424,17 @@
   function updateRangeUI() {
     var pctS, pctE, tS, tE;
     if (state.view === 'seasonal') {
-      var labels = seasonalAllLabels();
+      var labels = (state.mode === 'calendar' && calendarSeasonalMeta())
+        ? calendarSeasonalMeta().labels : seasonalAllLabels();
       var n = labels.length;
       if (n <= 1) return;
       pctS = (state.seasonalStart / (n - 1)) * 100;
       pctE = (state.seasonalEnd / (n - 1)) * 100;
       tS = labels[state.seasonalStart] || '—';
       tE = labels[state.seasonalEnd] || '—';
-      $('rangeHint').textContent = '左右拉动手柄，调节季节性图显示的年内日期范围';
+      $('rangeHint').textContent = (state.mode === 'calendar' && calendarSeasonalMeta())
+        ? '左右拉动手柄，调节季节性图显示的合约周期内日期范围（' + calendarSeasonalMeta().rangeLabel + '）'
+        : '左右拉动手柄，调节季节性图显示的年内日期范围';
     } else {
       var dsT = state.currentDates || [];
       var m = dsT.length;
@@ -544,6 +547,7 @@
     }
     var op = document.querySelector('.operator');
     if (op) op.textContent = mode === 'ratio' ? '÷' : '−';
+    if (state.view === 'seasonal') initSeasonalRange();   // 切模式后重置季节性图滑块到全区间
     renderShortcuts();
     refreshResult();
   }
@@ -634,8 +638,6 @@
     $('pricesChkLabel').classList.toggle('disabled', state.view === 'seasonal');
     $('rangeQuickBtns').style.display = state.view === 'time' ? 'flex' : 'none';
     $('yearRangeControl').style.display = state.view === 'seasonal' ? '' : 'none';
-    // 月差季节性图的横轴为固定合约周期，隐藏年内范围滑块
-    $('rangeControl').style.display = (state.view === 'seasonal' && state.mode === 'calendar') ? 'none' : '';
   }
 
   function syncCalendarLegB() {
@@ -901,11 +903,16 @@
     var cal = state.mode === 'calendar' ? calendarSeasonalMeta() : null;
     var labels, byYear;
     if (cal) {
-      labels = cal.labels;              // 合约周期横轴（跨年循环 MM-DD）
+      var calLabels = cal.labels;
+      // 夹紧滑块范围（切模式/切合约后可能越界）
+      if (state.seasonalEnd >= calLabels.length) state.seasonalEnd = calLabels.length - 1;
+      if (state.seasonalStart > state.seasonalEnd) state.seasonalStart = 0;
+      if (state.seasonalStart < 0) state.seasonalStart = 0;
+      labels = calLabels.slice(state.seasonalStart, state.seasonalEnd + 1);
       byYear = {};
       joined.forEach(function (r) {
         var pos = cal.posOf(r.date);
-        if (pos < 0) return;
+        if (pos < state.seasonalStart || pos > state.seasonalEnd) return;   // 滑块范围外跳过
         var y = String(cal.yearOf(r.date));
         if (!byYear[y]) byYear[y] = {};
         byYear[y][pos] = r.spread;
@@ -935,7 +942,8 @@
       var isLatest = i === years.length - 1;   // 最新年份红色加粗高亮
       return {
         label: y + '年',
-        data: labels.map(function (md, pos) {
+        data: labels.map(function (md, i) {
+          var pos = cal ? state.seasonalStart + i : i;
           return cal ? (byYear[y][pos] == null ? null : byYear[y][pos])
                      : (byYear[y][md] == null ? null : byYear[y][md]);
         }),
