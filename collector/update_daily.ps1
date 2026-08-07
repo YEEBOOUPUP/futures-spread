@@ -21,8 +21,20 @@ git add data\index.json data\*.json
 git commit -m "Daily data update"
 
 Write-Host '[3/3] 推送到 GitHub ...'
-git push
-if ($LASTEXITCODE -ne 0) { Write-Host ''; Write-Host '********** 推送失败，请检查上方报错 **********'; Pop-Location; exit 1 }
+$pushOk = $false
+for ($attempt = 1; $attempt -le 3; $attempt++) {
+    git push
+    if ($LASTEXITCODE -eq 0) { $pushOk = $true; break }
+    Write-Host "推送失败（第 $attempt/3 次），10 秒后重试 ..."
+    Start-Sleep -Seconds 10
+}
+if (-not $pushOk) {
+    $log = Join-Path $PSScriptRoot 'push_error.log'
+    git push 2>&1 | Out-File -Append -Encoding utf8 $log
+    Write-Host ''
+    Write-Host "********** 推送失败（3 次重试），详见 $log **********"
+    Pop-Location; exit 1
+}
 
 Write-Host ''
 Write-Host '============================================'
