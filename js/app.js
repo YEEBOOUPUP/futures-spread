@@ -352,6 +352,7 @@
       ctrs = ctrs.filter(function (c) { return RATIO_MONTHS.indexOf(c) >= 0; });
     }
     fillSelect(sel, ctrs, true);
+    if (state.mode === 'price' && ctrs.indexOf('主力') >= 0) sel.value = '主力';  // 品种价格默认主力
     if (ctrs.length && !sel.value) sel.value = ctrs[0];
     leg.contract = sel.value || null;
   }
@@ -556,14 +557,28 @@
       if (state.pickerB) state.pickerB.setDisabled(true);
       syncCalendarLegB();
       $('legHint').textContent = '月差 = 同一品种的合约 A − 合约 B（如 P 01月 − 05月），可点 ⇄ 交换方向';
-    } else if (mode === 'ratio') {
-      if (state.pickerB) state.pickerB.setDisabled(false);
-      $('legHint').textContent = '油粕比 = 油脂 A ÷ 粕类 B（A 选 P/Y/OI，B 选 M/RM），月份合约 01/03/05/07/09/11';
+    } else if (mode === 'price') {
+      var legB = $('legBBlock');
+      if (legB) legB.style.display = 'none';
+      var opEl = $('opBlock');
+      if (opEl) opEl.style.display = 'none';
+      if (state.pickerB) state.pickerB.setDisabled(true);
+      $('legHint').textContent = '品种价格 = 所选品种合约的单边价格（默认主力合约），可直接搜索切换品种';
+      $('modeShortcuts').innerHTML = '';
       fillContracts('A');
-      fillContracts('B');
     } else {
+      var legB2 = $('legBBlock');
+      if (legB2) legB2.style.display = '';
+      var opEl2 = $('opBlock');
+      if (opEl2) opEl2.style.display = '';
       if (state.pickerB) state.pickerB.setDisabled(false);
-      $('legHint').textContent = '价差 = 品种 A 合约 − 品种 B 合约（可跨品种任意组合，点 ⇄ 交换方向）';
+      if (mode === 'ratio') {
+        $('legHint').textContent = '油粕比 = 油脂 A ÷ 粕类 B（A 选 P/Y/OI，B 选 M/RM），月份合约 01/03/05/07/09/11';
+        fillContracts('A');
+        fillContracts('B');
+      } else {
+        $('legHint').textContent = '价差 = 品种 A 合约 − 品种 B 合约（可跨品种任意组合，点 ⇄ 交换方向）';
+      }
     }
     var isFlow = mode === 'flow';
     var legs = document.querySelector('.legs');
@@ -834,7 +849,11 @@
   /** animate=false 时图表即时更新（无动画），用于滑块拖动 */
   function refreshResult(animate) {
     var a = state.legA, b = state.legB;
-    if (!a.product || !a.contract || !b.product || !b.contract) { clearResult(); return; }
+    if (state.mode === 'price') {
+      if (!a.product || !a.contract) { clearResult(); return; }
+    } else {
+      if (!a.product || !a.contract || !b.product || !b.contract) { clearResult(); return; }
+    }
     // 月差模式提示（外盘品种为连续合约，无月份区分）
     if (state.mode === 'calendar') {
       var infoA = FuturesData.getProductInfo(a.product);
@@ -847,18 +866,25 @@
     if (!state.currentDates.length) { clearResult(); return; }
 
     var pA = FuturesData.getPrices(a.product, a.contract);
-    var pB = FuturesData.getPrices(b.product, b.contract);
-    if (!pA || !pB) {
+    var pB = state.mode === 'price' ? null : FuturesData.getPrices(b.product, b.contract);
+    if (!pA || (state.mode !== 'price' && !pB)) {
       clearResult();
       $('chartEmpty').textContent = '所选合约没有数据';
       $('chartEmpty').style.display = 'flex';
       return;
     }
     updateLegPrice('A', pA);
-    updateLegPrice('B', pB);
+    if (state.mode !== 'price') updateLegPrice('B', pB);
 
     var joined;
-    if (state.mode === 'ratio') {
+    if (state.mode === 'price') {
+      // 单边价格序列（B 腿无）
+      joined = [];
+      for (var pi = 0; pi < state.currentDates.length; pi++) {
+        var pv = pA[pi];
+        if (pv != null) joined.push({ date: state.currentDates[pi], a: pv, b: null, spread: pv });
+      }
+    } else if (state.mode === 'ratio') {
       joined = FuturesData.ratioSeries(state.currentDates, pA,
         FuturesData.getProductDates(b.product) || [], pB);
     } else {
@@ -873,12 +899,16 @@
       return;
     }
 
-    var title = state.mode === 'calendar' ? '月差走势' : (state.mode === 'ratio' ? '油粕比走势' : '价差走势');
+    var title = state.mode === 'calendar' ? '月差走势'
+      : (state.mode === 'ratio' ? '油粕比走势'
+        : (state.mode === 'price' ? '品种价格走势' : '价差走势'));
     var label;
     if (state.mode === 'calendar') {
       label = a.product + ' ' + a.contract + '月 − ' + b.contract + '月 月差';
     } else if (state.mode === 'ratio') {
       label = a.product + ' ÷ ' + b.product + '（' + a.contract + '月合约）油粕比';
+    } else if (state.mode === 'price') {
+      label = a.product + ' ' + a.contract + '月 单边价格';
     } else {
       label = a.product + a.contract + ' − ' + b.product + b.contract + ' 价差';
     }
@@ -951,7 +981,7 @@
     }];
 
     var showPrices = $('showPricesChk').checked;
-    if (showPrices) {
+    if (showPrices && state.mode !== 'price') {
       var byDate = function (prices) {
         var map = {};
         for (var i = 0; i < dates.length; i++) {
@@ -987,7 +1017,7 @@
               label: function (ctx) {
                 var d = joined[ctx.dataIndex];
                 if (ctx.datasetIndex === 0) {
-                  var opTxt = state.mode === 'ratio' ? '比值 = ' : '价差 = ';
+                  var opTxt = state.mode === 'ratio' ? '比值 = ' : (state.mode === 'price' ? '价格 = ' : '价差 = ');
                   return ' ' + opTxt + fmtNum(d.spread) + '  （A ' + fmtNum(d.a) + ' − B ' + fmtNum(d.b) + '）';
                 }
                 return ' ' + ctx.dataset.label + ' = ' + fmtNum(ctx.parsed.y);
@@ -1142,7 +1172,7 @@
           tooltip: {
             callbacks: {
               label: function (ctx) {
-                return ' ' + ctx.dataset.label + ' ' + ctx.label + ' ' + (state.mode === 'ratio' ? '比值 = ' : '价差 = ') + fmtNum(ctx.parsed.y);
+                return ' ' + ctx.dataset.label + ' ' + ctx.label + ' ' + (state.mode === 'ratio' ? '比值 = ' : (state.mode === 'price' ? '价格 = ' : '价差 = ')) + fmtNum(ctx.parsed.y);
               }
             }
           }

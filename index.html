@@ -24,7 +24,8 @@
   <!-- 选择区 -->
   <section class="card selector">
     <div class="mode-switch">
-      <button class="mode-btn active" data-mode="spread">跨品种价差</button>
+      <button class="mode-btn active" data-mode="price">品种价格</button>
+      <button class="mode-btn" data-mode="spread">跨品种价差</button>
       <button class="mode-btn" data-mode="calendar">同品种月差</button>
       <button class="mode-btn" data-mode="ratio">油粕比</button>
       <button class="mode-btn" data-mode="flow">日度海外数据</button>
@@ -44,10 +45,10 @@
         <div class="leg-price" id="legAPrice">—</div>
       </div>
 
-      <div class="operator">−</div>
+      <div class="operator" id="opBlock">−</div>
 
       <!-- 腿 B -->
-      <div class="leg">
+      <div class="leg" id="legBBlock">
         <div class="leg-head">
           <span class="leg-tag tag-b">B</span>
           <div class="product-picker">
