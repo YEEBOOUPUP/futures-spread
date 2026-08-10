@@ -27,6 +27,7 @@
       <button class="mode-btn active" data-mode="spread">跨品种价差</button>
       <button class="mode-btn" data-mode="calendar">同品种月差</button>
       <button class="mode-btn" data-mode="ratio">油粕比</button>
+      <button class="mode-btn" data-mode="flow">日度海外数据</button>
     </div>
 
     <div class="legs">
@@ -65,6 +66,12 @@
 
     <div class="hint" id="legHint"></div>
     <div class="shortcuts" id="modeShortcuts"></div>
+
+    <div class="flow-control" id="flowControl" style="display:none">
+      <label for="flowSel" class="flow-label">指标</label>
+      <select id="flowSel" class="select-contract"></select>
+      <span class="flow-desc">国际油脂油料相关价差 · 按年度叠加的季节性图（点击图例可隐藏年份）</span>
+    </div>
   </section>
 
   <!-- 结果区 -->
