@@ -24,11 +24,7 @@ OUT = os.path.join(BASE, 'data', 'profit_flow.json')
 ORDER = ['CB', 'CA', 'CP', 'CM', 'BY', 'JK', 'CF', 'CC', 'IL', 'ED',
          'Q', 'AW', 'BG', 'BH', 'BL', 'BN', 'BK', 'IS', 'IZ', 'IX', 'GN', 'IY', 'GT']
 
-# 年份起行（A 列）与结束行
-YEAR_START = {2020: 4752, 2021: 5118, 2022: 5483, 2023: 5848,
-              2024: 6213, 2025: 6579, 2026: 6944}
-YEAR_END = {2020: 5117, 2021: 5482, 2022: 5847, 2023: 6212,
-            2024: 6578, 2025: 6943, 2026: 7308}
+# 年份起行（A 列）与结束行 —— 改为自动检测全部年份（不再限定 2020 起）
 # 2020 闰年横轴（366 天 MM-DD）
 AXIS = [(datetime(2020, 1, 1) + __import__('datetime').timedelta(days=i)).strftime('%m-%d') for i in range(366)]
 
@@ -46,9 +42,9 @@ def main():
         u = ws.cell(row=3, column=col_ids[c]).value
         units[c] = str(u) if u is not None else ''
 
-    # 读取数据：A 列日期 + 指标列（用 'YYYY-MM-DD' 作 key，避免跨年覆盖）
+    # 读取全部数据：A 列日期 + 指标列（用 'YYYY-MM-DD' 作 key，避免跨年覆盖）
     data = {c: {} for c in ORDER}  # 列 -> {'YYYY-MM-DD': value}
-    for row in ws.iter_rows(min_row=4752, max_row=7308, max_col=max_col, values_only=True):
+    for row in ws.iter_rows(min_row=4, max_row=ws.max_row, max_col=max_col, values_only=True):
         d = row[0]
         key = d.strftime('%Y-%m-%d') if isinstance(d, datetime) else None
         for c in ORDER:
@@ -57,13 +53,18 @@ def main():
                 data[c][key] = float(v)
     wb.close()
 
+    # 全部年份（数据实际覆盖的年份）
+    all_keys = set().union(*[set(v.keys()) for v in data.values()])
+    years = sorted(set(k[:4] for k in all_keys))
+    print('数据年份: %s ~ %s（共 %d 年）' % (years[0], years[-1], len(years)))
+
     indicators = {}
     for c in ORDER:
-        years = {}
-        for yr in range(2020, 2027):
-            arr = [data[c].get('%d-%s' % (yr, dd)) for dd in AXIS]
-            years[str(yr)] = arr
-        indicators[c] = {'name': names[c], 'unit': units[c], 'years': years}
+        yrs = {}
+        for yr in years:
+            arr = [data[c].get('%s-%s' % (yr, dd)) for dd in AXIS]
+            yrs[str(yr)] = arr
+        indicators[c] = {'name': names[c], 'unit': units[c], 'years': yrs}
 
     out = {'updated_at': datetime.now().strftime('%Y-%m-%d %H:%M'),
            'axis': AXIS, 'order': ORDER, 'indicators': indicators}

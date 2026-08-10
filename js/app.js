@@ -389,7 +389,7 @@
   }
 
   function initSeasonalRange() {
-    var labels = state.mode === 'calendar' && calendarSeasonalMeta() ? calendarSeasonalMeta().labels : seasonalAllLabels();
+    var labels = seasonalRangeLabels();
     var n = labels.length;
     state.seasonalStart = 0;
     state.seasonalEnd = n - 1;
@@ -397,8 +397,21 @@
     setSlider($('rangeEnd'), 0, n - 1, n - 1);
   }
 
+  /** 季节性图横轴标签：日度海外数据 → 366 天模板；月差 → 合约周期；其余 → 自然年 */
+  function seasonalRangeLabels() {
+    if (state.mode === 'flow' && state.profitFlow) return state.profitFlow.axis;
+    if (state.mode === 'calendar' && calendarSeasonalMeta()) return calendarSeasonalMeta().labels;
+    return seasonalAllLabels();
+  }
+
   function setSlider(el, min, max, val) {
     el.min = min; el.max = max; el.value = val;
+  }
+
+  /** 刷新当前视图：日度海外数据模式走专用渲染，其余走 refreshResult */
+  function refreshView(animate) {
+    if (state.mode === 'flow') { renderProfitFlow(); return; }
+    refreshResult(animate);
   }
 
   function onRangeInput(which) {
@@ -417,30 +430,31 @@
       rafPending = true;
       requestAnimationFrame(function () {
         rafPending = false;
-        refreshResult(false);
+        refreshView(false);
       });
     }
   }
 
   function resetRange() {
     initRange();
-    refreshResult();
+    refreshView();
   }
 
   function updateRangeUI() {
     var pctS, pctE, tS, tE;
     if (state.view === 'seasonal') {
-      var labels = (state.mode === 'calendar' && calendarSeasonalMeta())
-        ? calendarSeasonalMeta().labels : seasonalAllLabels();
+      var labels = seasonalRangeLabels();
       var n = labels.length;
       if (n <= 1) return;
       pctS = (state.seasonalStart / (n - 1)) * 100;
       pctE = (state.seasonalEnd / (n - 1)) * 100;
       tS = labels[state.seasonalStart] || '—';
       tE = labels[state.seasonalEnd] || '—';
-      $('rangeHint').textContent = (state.mode === 'calendar' && calendarSeasonalMeta())
-        ? '左右拉动手柄，调节季节性图显示的合约周期内日期范围（' + calendarSeasonalMeta().rangeLabel + '）'
-        : '左右拉动手柄，调节季节性图显示的年内日期范围';
+      $('rangeHint').textContent = state.mode === 'flow'
+        ? '左右拉动手柄，调节日度海外数据图显示的年内日期范围'
+        : ((state.mode === 'calendar' && calendarSeasonalMeta())
+          ? '左右拉动手柄，调节季节性图显示的合约周期内日期范围（' + calendarSeasonalMeta().rangeLabel + '）'
+          : '左右拉动手柄，调节季节性图显示的年内日期范围');
     } else {
       var dsT = state.currentDates || [];
       var m = dsT.length;
@@ -571,8 +585,9 @@
   }
 
   /** 日度海外数据模式下隐藏与品种图无关的控件（切回时恢复） */
+  /** 日度海外数据模式下隐藏与品种图无关的控件（切回时恢复）；年份滑轨与底部时间滑块保留 */
   function setFlowControls(isFlow) {
-    var ids = ['rangeControl', 'pricesChkLabel', 'summaryGrid'];
+    var ids = ['pricesChkLabel', 'summaryGrid'];
     ids.forEach(function (id) {
       var el = $(id);
       if (el) el.style.display = isFlow ? 'none' : '';
@@ -628,13 +643,34 @@
     if (!ind) return;
     $('resultTitle').textContent = ind.name + (ind.unit ? '（' + ind.unit + '）' : '') + ' · 季节性';
     $('resultMeta').textContent = '日度海外数据 · 年度叠加（' + Object.keys(ind.years).length + ' 年）';
-    var labels = pf.axis;
-    var years = Object.keys(ind.years).sort();
+    // 年份范围过滤 + 年份滑轨（全部年份）
+    var allYears = Object.keys(ind.years).sort();
+    initYearRange(allYears);
+    var years = allYears.filter(function (y) {
+      if (state.yearMin != null && +y < state.yearMin) return false;
+      if (state.yearMax != null && +y > state.yearMax) return false;
+      return true;
+    });
+    // 年内范围（底部滑块，axis 366 天模板截取）
+    var axis = pf.axis;
+    if (state.seasonalEnd >= axis.length) state.seasonalEnd = axis.length - 1;
+    if (state.seasonalStart > state.seasonalEnd) state.seasonalStart = 0;
+    if (state.seasonalStart < 0) state.seasonalStart = 0;
+    var labels = axis.slice(state.seasonalStart, state.seasonalEnd + 1);
+    var startIdx = state.seasonalStart;
+    // 同步底部滑块（进入/切换指标后范围可能变化）
+    if ($('rangeStart').max !== String(axis.length - 1)) {
+      setSlider($('rangeStart'), 0, axis.length - 1, state.seasonalStart);
+      setSlider($('rangeEnd'), 0, axis.length - 1, state.seasonalEnd);
+    }
     var datasets = years.map(function (y, i) {
       var isLatest = i === years.length - 1;
       return {
         label: y + '年',
-        data: ind.years[y],
+        data: labels.map(function (md, k) {
+          var v = ind.years[y][startIdx + k];
+          return v == null ? null : v;
+        }),
         borderColor: isLatest ? '#dc2626' : yearColor(i, years.length),
         backgroundColor: isLatest ? 'rgba(220, 38, 38, .05)' : 'transparent',
         pointRadius: 0,
@@ -675,6 +711,7 @@
       }
     }, true);
     $('chartEmpty').style.display = 'none';
+    updateRangeUI();   // 同步底部滑块文本与高亮区间
   }
 
   /** 按当前模式渲染快捷键（月差：91/15/59；价差：豆棕/菜豆/菜棕/豆菜粕） */
@@ -1200,7 +1237,7 @@
     updateYearRangeBar();
     if (!rafPending) {
       rafPending = true;
-      requestAnimationFrame(function () { rafPending = false; refreshResult(); });
+      requestAnimationFrame(function () { rafPending = false; refreshView(); });
     }
   }
 
@@ -1212,7 +1249,7 @@
     yMin.value = state.yearMin;
     yMax.value = state.yearMax;
     updateYearRangeBar();
-    refreshResult();
+    refreshView();
   }
 
   function renderTable(joined) {
