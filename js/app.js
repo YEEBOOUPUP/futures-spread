@@ -29,6 +29,8 @@
     legB: { product: null, contract: null },
     profitFlow: null,      // data/profit_flow.json 缓存
     flowIndicator: null,   // 当前日度海外数据指标列
+    forexMap: null,        // 棕榈油内外套汇率 {date: rate}
+    palmMonth: '01',       // 当前内外套月份
     chart: null
   };
 
@@ -120,6 +122,10 @@
     $('yearMin').addEventListener('input', onYearRangeInput);
     $('yearMax').addEventListener('input', onYearRangeInput);
     $('yearResetBtn').addEventListener('click', resetYearRange);
+    $('palmMonthSel').addEventListener('change', function () {
+      state.palmMonth = this.value;
+      renderPalm();
+    });
   }
 
   // ================= 选择器 =================
@@ -409,9 +415,10 @@
     el.min = min; el.max = max; el.value = val;
   }
 
-  /** 刷新当前视图：日度海外数据模式走专用渲染，其余走 refreshResult */
+  /** 刷新当前视图：日度海外数据/棕榈油内外套走专用渲染，其余走 refreshResult */
   function refreshView(animate) {
     if (state.mode === 'flow') { renderProfitFlow(); return; }
+    if (state.mode === 'palm') { renderPalm(); return; }
     refreshResult(animate);
   }
 
@@ -581,15 +588,26 @@
       }
     }
     var isFlow = mode === 'flow';
+    var hideLegs = isFlow || mode === 'palm';
     var legs = document.querySelector('.legs');
-    if (legs) legs.style.display = isFlow ? 'none' : '';
+    if (legs) legs.style.display = hideLegs ? 'none' : '';
     var fc = $('flowControl');
     if (fc) fc.style.display = isFlow ? '' : 'none';
+    var pc = $('palmControl');
+    if (pc) pc.style.display = mode === 'palm' ? '' : 'none';
     setFlowControls(isFlow);
     if (isFlow) {
       $('legHint').textContent = '日度海外数据：国际油脂油料相关价差的季节性图（每年一条线，最新年份红色加粗，点击图例可隐藏年份）';
       $('modeShortcuts').innerHTML = '';
       loadProfitFlow();
+      return;
+    }
+    if (mode === 'palm') {
+      $('legHint').textContent = '棕榈油内外套 = 国内 P − 马盘 FCPO ÷ 汇率 × 1.09 × 1.09（进口成本）；月份一一对应，共 12 个月';
+      $('modeShortcuts').innerHTML = '';
+      fillPalmMonthSel();
+      loadPalmData().then(function () { renderPalm(); })
+        .catch(function (err) { showStatus('err', '棕榈油内外套数据加载失败：' + err.message); });
       return;
     }
     var op = document.querySelector('.operator');
@@ -729,6 +747,70 @@
     updateRangeUI();   // 同步底部滑块文本与高亮区间
   }
 
+  /** 棕榈油内外套：加载 P、马盘 FCPO 与汇率数据 */
+  function loadPalmData() {
+    return FuturesData.ensureProducts(['P', 'F_FCPO']).then(function () {
+      if (state.forexMap) return;
+      return fetch('data/forex.json', { cache: 'no-cache' })
+        .then(function (res) { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
+        .then(function (fx) {
+          if (!fx || !fx.dates || !fx.rate) throw new Error('forex.json 结构无效');
+          state.forexMap = {};
+          for (var i = 0; i < fx.dates.length; i++) state.forexMap[fx.dates[i]] = fx.rate[i];
+        });
+    });
+  }
+
+  function fillPalmMonthSel() {
+    var sel = $('palmMonthSel');
+    sel.innerHTML = '';
+    for (var m = 1; m <= 12; m++) {
+      var md = (m < 10 ? '0' : '') + m;
+      var o = document.createElement('option');
+      o.value = md;
+      o.textContent = md + '月';
+      sel.appendChild(o);
+    }
+    if (state.palmMonth) sel.value = state.palmMonth;
+  }
+
+  /** 棕榈油内外套：P − FCPO ÷ 汇率 × 1.09 × 1.09（月份一一对应） */
+  function renderPalm() {
+    if (!state.forexMap) {
+      loadPalmData().then(function () { renderPalm(); })
+        .catch(function (err) { showStatus('err', '棕榈油内外套数据加载失败：' + err.message); });
+      return;
+    }
+    var m = state.palmMonth || '01';
+    var P = FuturesData.getPrices('P', m);
+    var F = FuturesData.getPrices('F_FCPO', m);
+    var dP = FuturesData.getProductDates('P');
+    var dF = FuturesData.getProductDates('F_FCPO');
+    if (!P || !F || !dP || !dF) {
+      $('chartEmpty').textContent = '数据加载中…';
+      $('chartEmpty').style.display = 'flex';
+      return;
+    }
+    var fMap = {};
+    for (var i = 0; i < dF.length; i++) fMap[dF[i]] = F[i];
+    var joined = [];
+    for (var j = 0; j < dP.length; j++) {
+      var p = P[j], f = fMap[dP[j]], fx = state.forexMap[dP[j]];
+      if (p == null || f == null || fx == null || fx === 0) continue;
+      var cost = Math.round(f / fx * 1.09 * 1.09 * 100) / 100;   // 进口成本 = FCPO÷汇率×1.09²
+      joined.push({ date: dP[j], a: p, b: cost, spread: Math.round((p - cost) * 100) / 100 });
+    }
+    if (!joined.length) { showStatus('warn', 'P 与马盘/汇率无共同交易日'); return; }
+    if (state.view === 'time') joined = filterByRange(joined);
+    var label = 'P' + m + ' − FCPO' + m + '×1.09²÷汇率';
+    $('resultTitle').textContent = '棕榈油内外套：' + label;
+    renderSummary(FuturesData.summarize(joined));
+    renderChart(joined, null, null, label, false);
+    renderTable(joined);
+    $('chartEmpty').style.display = 'none';
+    updateRangeUI();
+  }
+
   /** 按当前模式渲染快捷键（月差：91/15/59；价差：豆棕/菜豆/菜棕/豆菜粕） */
   function renderShortcuts() {
     var box = $('modeShortcuts');
@@ -805,7 +887,7 @@
     });
     syncViewControls();
     initRange();      // 滑块切换到该视图的全范围
-    refreshResult();
+    refreshView();
   }
 
   /** 季节性图只画价差线，禁用"叠加价格线"复选框；时间快捷键仅时序图可见；年份滑轨仅季节性图 */
@@ -947,14 +1029,26 @@
     grid.innerHTML = '';
     if (!s) return;
     $('resultMeta').textContent = '共 ' + s.count + ' 个共同交易日 · ' + s.firstDate + ' ~ ' + s.lastDate;
-    var items = [
-      { k: '最新价差', v: fmtNum(s.latest), cls: signCls(s.latest), sub: s.change == null ? '' : '较前日 ' + (s.change >= 0 ? '+' : '') + fmtNum(s.change) },
-      { k: '区间最高', v: fmtNum(s.high), cls: 'pos', sub: '' },
-      { k: '区间最低', v: fmtNum(s.low), cls: 'neg', sub: '' },
-      { k: '区间均值', v: fmtNum(s.avg), cls: '', sub: '' },
-      { k: 'A 最新价', v: fmtNum(s.lastA), cls: '', sub: state.legA.product + ' ' + state.legA.contract + '月' },
-      { k: 'B 最新价', v: fmtNum(s.lastB), cls: '', sub: state.legB.product + ' ' + state.legB.contract + '月' }
-    ];
+    var items;
+    if (state.mode === 'palm') {
+      items = [
+        { k: '最新内外套', v: fmtNum(s.latest), cls: signCls(s.latest), sub: s.change == null ? '' : '较前日 ' + (s.change >= 0 ? '+' : '') + fmtNum(s.change) },
+        { k: '区间最高', v: fmtNum(s.high), cls: 'pos', sub: '' },
+        { k: '区间最低', v: fmtNum(s.low), cls: 'neg', sub: '' },
+        { k: '区间均值', v: fmtNum(s.avg), cls: '', sub: '' },
+        { k: '国内 P', v: fmtNum(s.lastA), cls: '', sub: 'P ' + (state.palmMonth || '01') + '月合约' },
+        { k: '进口成本', v: fmtNum(s.lastB), cls: '', sub: 'FCPO ' + (state.palmMonth || '01') + ' ÷ 汇率 × 1.09²' }
+      ];
+    } else {
+      items = [
+        { k: '最新价差', v: fmtNum(s.latest), cls: signCls(s.latest), sub: s.change == null ? '' : '较前日 ' + (s.change >= 0 ? '+' : '') + fmtNum(s.change) },
+        { k: '区间最高', v: fmtNum(s.high), cls: 'pos', sub: '' },
+        { k: '区间最低', v: fmtNum(s.low), cls: 'neg', sub: '' },
+        { k: '区间均值', v: fmtNum(s.avg), cls: '', sub: '' },
+        { k: 'A 最新价', v: fmtNum(s.lastA), cls: '', sub: state.legA.product + ' ' + state.legA.contract + '月' },
+        { k: 'B 最新价', v: fmtNum(s.lastB), cls: '', sub: state.legB.product + ' ' + state.legB.contract + '月' }
+      ];
+    }
     items.forEach(function (it) {
       var div = document.createElement('div');
       div.className = 'summary-item';
@@ -981,7 +1075,7 @@
     }];
 
     var showPrices = $('showPricesChk').checked;
-    if (showPrices && state.mode !== 'price') {
+    if (showPrices && state.mode !== 'price' && state.mode !== 'palm') {
       var byDate = function (prices) {
         var map = {};
         for (var i = 0; i < dates.length; i++) {
@@ -1017,7 +1111,7 @@
               label: function (ctx) {
                 var d = joined[ctx.dataIndex];
                 if (ctx.datasetIndex === 0) {
-                  var opTxt = state.mode === 'ratio' ? '比值 = ' : (state.mode === 'price' ? '价格 = ' : '价差 = ');
+                  var opTxt = state.mode === 'ratio' ? '比值 = ' : (state.mode === 'price' ? '价格 = ' : (state.mode === 'palm' ? '内外套 = ' : '价差 = '));
                   return ' ' + opTxt + fmtNum(d.spread) + '  （A ' + fmtNum(d.a) + ' − B ' + fmtNum(d.b) + '）';
                 }
                 return ' ' + ctx.dataset.label + ' = ' + fmtNum(ctx.parsed.y);
@@ -1172,7 +1266,7 @@
           tooltip: {
             callbacks: {
               label: function (ctx) {
-                return ' ' + ctx.dataset.label + ' ' + ctx.label + ' ' + (state.mode === 'ratio' ? '比值 = ' : (state.mode === 'price' ? '价格 = ' : '价差 = ')) + fmtNum(ctx.parsed.y);
+                return ' ' + ctx.dataset.label + ' ' + ctx.label + ' ' + (state.mode === 'ratio' ? '比值 = ' : (state.mode === 'price' ? '价格 = ' : (state.mode === 'palm' ? '内外套 = ' : '价差 = '))) + fmtNum(ctx.parsed.y);
               }
             }
           }

@@ -26,6 +26,7 @@
     <div class="mode-switch">
       <button class="mode-btn active" data-mode="price">品种价格</button>
       <button class="mode-btn" data-mode="spread">跨品种价差</button>
+      <button class="mode-btn" data-mode="palm">棕榈油内外套</button>
       <button class="mode-btn" data-mode="calendar">同品种月差</button>
       <button class="mode-btn" data-mode="ratio">油粕比</button>
       <button class="mode-btn" data-mode="flow">日度海外数据</button>
@@ -72,6 +73,11 @@
       <label for="flowSel" class="flow-label">指标</label>
       <select id="flowSel" class="select-contract"></select>
       <span class="flow-desc">国际油脂油料相关价差 · 按年度叠加的季节性图（点击图例可隐藏年份）</span>
+    </div>
+    <div class="flow-control" id="palmControl" style="display:none">
+      <label for="palmMonthSel" class="flow-label">月份</label>
+      <select id="palmMonthSel" class="select-contract"></select>
+      <span class="flow-desc">内外套 = 国内P − 马盘FCPO ÷ 汇率 × 1.09 × 1.09（进口成本），月份一一对应</span>
     </div>
   </section>
 
