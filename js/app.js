@@ -1148,20 +1148,14 @@
     return (m + 1 < 10 ? '0' : '') + (m + 1) + '-' + (d < 9 ? '0' : '') + (d + 1);
   }
   function month15(m) { return (m < 10 ? '0' : '') + m + '-15'; }
-  /** 月差合约周期：横轴 = [后交割月15日(上一合约年度), 先交割月15日]；图例 = 先交割月交割年 */
+  /** 月差合约周期：横轴固定 8 个月 —— 从 A 合约月往前推 8 个月的 15 日，到 A 合约月 15 日（图例 = A 合约交割年） */
   function calendarSeasonalMeta() {
     var cA = state.legA.contract, cB = state.legB.contract;
     if (!/^\d{2}$/.test(cA) || !/^\d{2}$/.test(cB) || cA === cB) return null; // 主力/最近或同月 → 自然年
-    var a = +cA, b = +cB;
-    var now = new Date();
-    var nm = now.getMonth() + 1, nd = now.getDate();
-    function nextYear(m) { return now.getFullYear() + ((m < nm || (m === nm && nd > 15)) ? 1 : 0); }
-    var ya = nextYear(a), yb = nextYear(b);
-    var firstM, lastM;                  // firstM = 先交割月、lastM = 后交割月
-    if (ya < yb || (ya === yb && a < b)) { firstM = a; lastM = b; }
-    else { firstM = b; lastM = a; }
-    var startDay = mdToDay(month15(lastM));
-    var endDay = mdToDay(month15(firstM));
+    var a = +cA;
+    var startM = (a + 4) % 12;          // 起点月 = A 往前推 8 个月（(a-8+12)%12 ≡ (a+4)%12）
+    var startDay = mdToDay(month15(startM));
+    var endDay = mdToDay(month15(a));
     var labels = [];
     var d = startDay;
     while (true) {
@@ -1173,15 +1167,15 @@
       var pos = (mdToDay(dateStr.slice(5)) - startDay + 366) % 366;
       return pos < labels.length ? pos : -1;
     }
-    function yearOf(dateStr) {          // 合约年度 = 先交割月 nextYear
+    function yearOf(dateStr) {          // 合约年度 = A 合约（近月）交割年
       var y = +dateStr.slice(0, 4), m = +dateStr.slice(5, 7), dd = +dateStr.slice(8, 10);
-      return y + ((m > firstM || (m === firstM && dd > 15)) ? 1 : 0);
+      return y + ((m > a || (m === a && dd > 15)) ? 1 : 0);
     }
     return {
       labels: labels,
       posOf: posOf,
       yearOf: yearOf,
-      rangeLabel: month15(lastM) + ' ~ ' + month15(firstM)
+      rangeLabel: month15(startM) + ' ~ ' + month15(a)
     };
   }
 
