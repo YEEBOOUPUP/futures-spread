@@ -1137,6 +1137,7 @@
   var MD_DAY_START = [1, 32, 61, 92, 122, 153, 183, 214, 245, 275, 306, 336]; // 每月 1 日（1-based）
   function mdToDay(md) {                 // 'MM-DD' → 0..365（0 = 01-01）
     var m = +md.slice(0, 2), d = +md.slice(3);
+    if (m < 1 || m > 12 || d < 1 || d > 31) return 0;   // 防御：非法输入返回 0，避免 NaN 死循环
     return MD_DAY_START[m - 1] + d - 2;
   }
   function dayToMD(day) {                // 0..365 → 'MM-DD'
@@ -1147,7 +1148,11 @@
     }
     return (m + 1 < 10 ? '0' : '') + (m + 1) + '-' + (d < 9 ? '0' : '') + (d + 1);
   }
-  function month15(m) { return (m < 10 ? '0' : '') + m + '-15'; }
+  function month15(m) {
+    if (m < 1) m = 12;              // 0 → 12 月（8 月合约往前推 8 个月 = 12 月）
+    if (m > 12) m = m % 12 || 12;
+    return (m < 10 ? '0' : '') + m + '-15';
+  }
   /** 月差合约周期：横轴固定 8 个月 —— 从 A 合约月往前推 8 个月的 15 日，到 A 合约月 15 日（图例 = A 合约交割年） */
   function calendarSeasonalMeta() {
     var cA = state.legA.contract, cB = state.legB.contract;
