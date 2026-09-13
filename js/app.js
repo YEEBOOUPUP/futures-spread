@@ -1153,14 +1153,13 @@
     if (m > 12) m = m % 12 || 12;
     return (m < 10 ? '0' : '') + m + '-15';
   }
-  /** 月差合约周期：横轴固定 8 个月 —— 从 A 合约月往前推 8 个月的 15 日，到 A 合约月 15 日（图例 = A 合约交割年） */
+  /** 月差合约周期：横轴 = [B 合约月 15 日（上一年度）→ A 合约月 15 日（本年度）]；图例 = A 合约交割年 */
   function calendarSeasonalMeta() {
     var cA = state.legA.contract, cB = state.legB.contract;
     if (!/^\d{2}$/.test(cA) || !/^\d{2}$/.test(cB) || cA === cB) return null; // 主力/最近或同月 → 自然年
-    var a = +cA;
-    var startM = (a + 4) % 12;          // 起点月 = A 往前推 8 个月（(a-8+12)%12 ≡ (a+4)%12）
-    var startDay = mdToDay(month15(startM));
-    var endDay = mdToDay(month15(a));
+    var a = +cA, b = +cB;
+    var startDay = mdToDay(month15(b));   // 起点 = B（远月）合约月 15 日（上一年度）
+    var endDay = mdToDay(month15(a));     // 终点 = A（近月）合约月 15 日（本年度）
     var labels = [];
     var d = startDay;
     while (true) {
@@ -1180,7 +1179,7 @@
       labels: labels,
       posOf: posOf,
       yearOf: yearOf,
-      rangeLabel: month15(startM) + ' ~ ' + month15(a)
+      rangeLabel: month15(b) + ' ~ ' + month15(a)
     };
   }
 
