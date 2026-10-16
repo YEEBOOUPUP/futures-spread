@@ -401,3 +401,5 @@ select:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent
 @media (max-width: 900px) {
   .rank-tables { grid-template-columns: 1fr; }
 }
+
+.rank-empty { margin-top: 14px; padding: 40px 16px; text-align: center; color: var(--muted); font-size: 13px; border: 1px dashed var(--line); border-radius: 10px; background: #fff; }

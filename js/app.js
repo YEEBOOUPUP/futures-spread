@@ -30,6 +30,7 @@
     profitFlow: null,      // data/profit_flow.json 缓存
     flowIndicator: null,   // 当前日度海外数据指标列
     forexMap: null,        // 棕榈油内外套汇率 {date: rate}
+    rankAvailable: false,  // 当前品种是否有龙虎榜数据
     palmMonth: '01',       // 当前内外套月份
     chart: null
   };
@@ -144,24 +145,24 @@
   // ================= 持仓龙虎榜 =================
   /** 加载并渲染选中品种的持仓龙虎榜（新浪：成交量/多单/空单前 20） */
   function loadRank(product) {
-    var card = $('rankCard');
-    if (!product) { card.style.display = 'none'; return; }
+    if (!product) { state.rankAvailable = false; syncViewControls(); return; }
     fetch('data/rank/' + product + '.json', { cache: 'no-cache' })
       .then(function (res) {
         if (!res.ok) throw new Error('HTTP ' + res.status);
         return res.json();
       })
       .then(function (d) {
-        if (!d || !d.vol) { card.style.display = 'none'; return; }
+        if (!d || !d.vol) { state.rankAvailable = false; syncViewControls(); return; }
         var dt = String(d.date);
         $('rankMeta').textContent = (d.contract || product) + ' · ' +
           dt.slice(0, 4) + '-' + dt.slice(4, 6) + '-' + dt.slice(6, 8);
         renderRankCol($('rankVolBody'), d.vol);
         renderRankCol($('rankLongBody'), d.long);
         renderRankCol($('rankShortBody'), d.short);
-        card.style.display = '';
+        state.rankAvailable = true;
+        syncViewControls();
       })
-      .catch(function () { card.style.display = 'none'; });
+      .catch(function () { state.rankAvailable = false; syncViewControls(); });
   }
 
   function renderRankCol(tbody, rows) {
@@ -473,6 +474,7 @@
 
   /** 刷新当前视图：日度海外数据/棕榈油内外套走专用渲染，其余走 refreshResult */
   function refreshView(animate) {
+    if (state.view === 'rank') { loadRank(state.legA.product); return; }   // 龙虎榜视图
     if (state.mode === 'flow') { renderProfitFlow(); return; }
     if (state.mode === 'palm') { renderPalm(); return; }
     refreshResult(animate);
@@ -948,11 +950,23 @@
 
   /** 季节性图只画价差线，禁用"叠加价格线"复选框；时间快捷键仅时序图可见；年份滑轨仅季节性图 */
   function syncViewControls() {
+    var isRank = state.view === 'rank';
     var chk = $('showPricesChk');
     chk.disabled = state.view === 'seasonal';
     $('pricesChkLabel').classList.toggle('disabled', state.view === 'seasonal');
     $('rangeQuickBtns').style.display = state.view === 'time' ? 'flex' : 'none';
     $('yearRangeControl').style.display = state.view === 'seasonal' ? '' : 'none';
+    // 龙虎榜视图：隐藏图表相关区块，只留龙虎榜
+    var chartWrap = document.querySelector('.chart-wrap');
+    if (chartWrap) chartWrap.style.display = isRank ? 'none' : '';
+    $('summaryGrid').style.display = isRank ? 'none' : '';
+    $('pricesChkLabel').style.display = isRank ? 'none' : '';
+    var rangeControl = $('rangeControl');
+    if (rangeControl) rangeControl.style.display = isRank ? 'none' : '';
+    var tableWrap = document.querySelector('.table-wrap');
+    if (tableWrap) tableWrap.style.display = isRank ? 'none' : '';
+    $('rankCard').style.display = (isRank && state.rankAvailable) ? '' : 'none';
+    $('rankEmpty').style.display = (isRank && !state.rankAvailable) ? '' : 'none';
   }
 
   function syncCalendarLegB() {

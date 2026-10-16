@@ -116,6 +116,7 @@
       <div class="view-switch">
         <button class="mode-btn active" data-view="seasonal">季节性图 · 按年叠加</button>
         <button class="mode-btn" data-view="time">时序图</button>
+        <button class="mode-btn" data-view="rank">持仓龙虎榜</button>
       </div>
       <div class="yaxis-control">
         <span class="yaxis-label">纵轴范围</span>
@@ -144,6 +145,31 @@
     <div class="chart-wrap">
       <canvas id="spreadChart"></canvas>
       <div class="chart-empty" id="chartEmpty">请选择品种与合约</div>
+    </div>
+
+    <div class="rank-card" id="rankCard" style="display:none">
+      <div class="rank-head">
+        <span class="rank-title">持仓龙虎榜</span>
+        <span class="rank-meta" id="rankMeta">—</span>
+        <span class="rank-note">前 20 名会员（新浪）</span>
+      </div>
+      <div class="rank-tables">
+        <div class="rank-col">
+          <div class="rank-col-title">成交量排名</div>
+          <table class="rank-table"><thead><tr><th>名次</th><th>会员</th><th>成交量</th><th>增减</th></tr></thead><tbody id="rankVolBody"></tbody></table>
+        </div>
+        <div class="rank-col">
+          <div class="rank-col-title">多单排名</div>
+          <table class="rank-table"><thead><tr><th>名次</th><th>会员</th><th>多单持仓</th><th>增减</th></tr></thead><tbody id="rankLongBody"></tbody></table>
+        </div>
+        <div class="rank-col">
+          <div class="rank-col-title">空单排名</div>
+          <table class="rank-table"><thead><tr><th>名次</th><th>会员</th><th>空单持仓</th><th>增减</th></tr></thead><tbody id="rankShortBody"></tbody></table>
+        </div>
+      </div>
+    </div>
+    <div class="rank-empty" id="rankEmpty" style="display:none">
+      该品种暂无持仓龙虎榜数据（外盘品种无龙虎榜）
     </div>
 
     <div class="range-control" id="rangeControl">
@@ -182,27 +208,6 @@
       </table>
     </div>
 
-    <div class="rank-card" id="rankCard" style="display:none">
-      <div class="rank-head">
-        <span class="rank-title">持仓龙虎榜</span>
-        <span class="rank-meta" id="rankMeta">—</span>
-        <span class="rank-note">前 20 名会员（新浪）</span>
-      </div>
-      <div class="rank-tables">
-        <div class="rank-col">
-          <div class="rank-col-title">成交量排名</div>
-          <table class="rank-table"><thead><tr><th>名次</th><th>会员</th><th>成交量</th><th>增减</th></tr></thead><tbody id="rankVolBody"></tbody></table>
-        </div>
-        <div class="rank-col">
-          <div class="rank-col-title">多单排名</div>
-          <table class="rank-table"><thead><tr><th>名次</th><th>会员</th><th>多单持仓</th><th>增减</th></tr></thead><tbody id="rankLongBody"></tbody></table>
-        </div>
-        <div class="rank-col">
-          <div class="rank-col-title">空单排名</div>
-          <table class="rank-table"><thead><tr><th>名次</th><th>会员</th><th>空单持仓</th><th>增减</th></tr></thead><tbody id="rankShortBody"></tbody></table>
-        </div>
-      </div>
-    </div>
   </section>
 
   <!-- 数据管理 -->
