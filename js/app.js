@@ -126,6 +126,60 @@
       state.palmMonth = this.value;
       renderPalm();
     });
+    // 热门品种快选
+    document.querySelectorAll('#hotPicks .chip').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var code = btn.dataset.p;
+        state.legA.product = code;
+        state.legA.contract = null;
+        if (state.pickerA) state.pickerA.setValue(code);
+        fillContracts('A');
+        if (state.mode === 'calendar') syncCalendarLegB();
+        refreshAsync();
+        loadRank(code);
+      });
+    });
+  }
+
+  // ================= 持仓龙虎榜 =================
+  /** 加载并渲染选中品种的持仓龙虎榜（新浪：成交量/多单/空单前 20） */
+  function loadRank(product) {
+    var card = $('rankCard');
+    if (!product) { card.style.display = 'none'; return; }
+    fetch('data/rank/' + product + '.json', { cache: 'no-cache' })
+      .then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      })
+      .then(function (d) {
+        if (!d || !d.vol) { card.style.display = 'none'; return; }
+        var dt = String(d.date);
+        $('rankMeta').textContent = (d.contract || product) + ' · ' +
+          dt.slice(0, 4) + '-' + dt.slice(4, 6) + '-' + dt.slice(6, 8);
+        renderRankCol($('rankVolBody'), d.vol);
+        renderRankCol($('rankLongBody'), d.long);
+        renderRankCol($('rankShortBody'), d.short);
+        card.style.display = '';
+      })
+      .catch(function () { card.style.display = 'none'; });
+  }
+
+  function renderRankCol(tbody, rows) {
+    tbody.innerHTML = '';
+    (rows || []).slice(0, 20).forEach(function (r) {
+      var tr = document.createElement('tr');
+      var chg = r.chg;
+      var cls = chg > 0 ? 'pos' : (chg < 0 ? 'neg' : '');
+      var chgTxt = chg == null ? '-' : ((chg >= 0 ? '+' : '') + fmtInt(chg));
+      tr.innerHTML = '<td>' + r.rank + '</td><td class="rank-name">' + r.name + '</td><td>' +
+        fmtInt(r.value) + '</td><td class="' + cls + '">' + chgTxt + '</td>';
+      tbody.appendChild(tr);
+    });
+  }
+
+  function fmtInt(n) {
+    if (n == null) return '-';
+    return Math.round(n).toLocaleString('zh-CN');
   }
 
   // ================= 选择器 =================
@@ -175,6 +229,7 @@
       fillContracts('A');
       if (state.mode === 'calendar') syncCalendarLegB();
       refreshAsync();
+      loadRank(code);
     });
     state.pickerB = createProductPicker('legBProductInput', 'legBProductList', function (code) {
       state.legB.product = code;
@@ -192,6 +247,7 @@
     pickDefaultContracts();
     setMode(state.mode);
     refreshAsync();   // 异步加载 A/B 品种数据后计算
+    loadRank(state.legA.product);
   }
 
   /** 品种显示名：代码 · 中文（无效名称回退内置映射） */

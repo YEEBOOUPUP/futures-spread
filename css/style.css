@@ -369,3 +369,34 @@ select:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent
 }
 .flow-label { font-size: 13px; color: var(--muted); white-space: nowrap; }
 .flow-desc { font-size: 12px; color: var(--muted); }
+
+/* ---------- 热门品种快选 ---------- */
+.hot-picks { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.hot-label { font-size: 12px; color: var(--muted); margin-right: 2px; }
+.chip {
+  padding: 4px 10px; font-size: 12px; border: 1px solid var(--line); border-radius: 999px;
+  background: #fff; color: var(--text); cursor: pointer; white-space: nowrap; transition: all .15s;
+}
+.chip:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+
+/* ---------- 持仓龙虎榜 ---------- */
+.rank-card { margin-top: 14px; border: 1px solid var(--line); border-radius: 10px; background: #fff; overflow: hidden; }
+.rank-head { display: flex; align-items: baseline; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); background: #fafafa; }
+.rank-title { font-weight: 700; font-size: 15px; }
+.rank-meta { font-size: 12px; color: var(--accent); font-weight: 600; }
+.rank-note { font-size: 11px; color: var(--muted); margin-left: auto; }
+.rank-tables { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); }
+.rank-col { background: #fff; }
+.rank-col-title { padding: 8px 12px; font-size: 12px; font-weight: 600; color: var(--muted); border-bottom: 1px solid var(--line); }
+.rank-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.rank-table th { padding: 4px 8px; color: var(--muted); font-weight: 500; text-align: right; background: #fafafa; border-bottom: 1px solid var(--line); }
+.rank-table th:nth-child(2) { text-align: left; }
+.rank-table td { padding: 3px 8px; text-align: right; border-bottom: 1px dashed var(--line); font-variant-numeric: tabular-nums; }
+.rank-table td:nth-child(2) { text-align: left; }
+.rank-table .rank-name { white-space: nowrap; }
+.rank-table tr:last-child td { border-bottom: none; }
+.rank-table .pos { color: #d92c2c; }
+.rank-table .neg { color: #0c8f3e; }
+@media (max-width: 900px) {
+  .rank-tables { grid-template-columns: 1fr; }
+}

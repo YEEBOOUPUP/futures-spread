@@ -12,15 +12,19 @@ Write-Host '  每日数据采集（OpenCTP 收盘价）'
 Write-Host '============================================'
 Write-Host ''
 
-Write-Host '[1/3] 正在采集当日收盘价（国内，openctp）...'
+Write-Host '[1/4] 正在采集当日收盘价（国内，openctp）...'
 python collector\daily_fetch.py
 if ($LASTEXITCODE -ne 0) { Write-Host ''; Write-Host '********** 国内采集失败，请检查上方报错 **********'; Pop-Location; exit 1 }
 
-Write-Host '[2/3] 提交数据 ...'
-git add data\index.json data\*.json
+Write-Host '[2/4] 正在采集持仓龙虎榜（新浪）...'
+python collector\rank_fetch.py
+if ($LASTEXITCODE -ne 0) { Write-Host ''; Write-Host '********** 龙虎榜采集失败（不阻断） **********' }
+
+Write-Host '[3/4] 提交数据 ...'
+git add data\index.json data\*.json data\rank\*.json
 git commit -m "Daily data update"
 
-Write-Host '[3/3] 推送到 GitHub ...'
+Write-Host '[4/4] 推送到 GitHub ...'
 $pushOk = $false
 for ($attempt = 1; $attempt -le 3; $attempt++) {
     git push
