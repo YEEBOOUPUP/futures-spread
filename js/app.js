@@ -1122,8 +1122,8 @@
     var datasets = [{
       label: label,
       data: spreads,
-      borderColor: '#2563eb',
-      backgroundColor: 'rgba(37, 99, 235, .08)',
+      borderColor: '#d92c2c',
+      backgroundColor: 'rgba(217, 44, 44, .07)',
       fill: true,
       pointRadius: 0,
       borderWidth: 2,
@@ -1144,7 +1144,7 @@
       datasets.push({
         label: 'A 价格',
         data: dates.map(function (d) { return mapA[d] == null ? null : mapA[d]; }),
-        borderColor: '#2563eb', borderDash: [4, 4], pointRadius: 0, borderWidth: 1, yAxisID: 'y1'
+        borderColor: '#d92c2c', borderDash: [4, 4], pointRadius: 0, borderWidth: 1, yAxisID: 'y1'
       });
       datasets.push({
         label: 'B 价格',
