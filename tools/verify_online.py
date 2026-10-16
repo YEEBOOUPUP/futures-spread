@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""线上验证：龙虎榜视图 + bat 修复 + 数据"""
+"""线上验证：龙虎榜升级（上移/日期/净榜）+ 视图 bug 修复"""
 import json
 import time
 import urllib.request
@@ -14,11 +14,16 @@ def get(path):
 
 html = get('index.html')
 app = get('js/app.js')
-rank = json.loads(get('data/rank/P.json'))
+print('龙虎榜视图按钮:', 'data-view="rank"' in html)
+print('日期下拉:', 'rankDateSel' in html)
+print('净多/净空榜元素:', 'rankNetLongBody' in html and 'rankNetShortBody' in html)
+print('龙虎榜在汇总卡之前(上移):', html.find('rankCard') < html.find('summaryGrid'))
+print('视图bug修复(限定.mode-switch):', "querySelectorAll('.mode-switch .mode-btn')" in app)
+print('净榜渲染函数:', 'renderNetCol' in app)
 
-print('线上 龙虎榜视图按钮:', 'data-view="rank"' in html)
-print('线上 rankEmpty 提示:', 'rankEmpty' in html)
-print('线上 rank 视图逻辑:', "state.view === 'rank'" in app)
-print('线上 P 龙虎榜:', rank['contract'], '| 多单第1', rank['long'][0]['name'], rank['long'][0]['value'])
-print('线上 红色主题:', '--accent: #d92c2c' in get('css/style.css'))
-print('线上 Pico CDN:', 'pico.red.min.css' in html)
+rank = json.loads(get('data/rank/P.json'))
+day = rank['data'][rank['dates'][0]]
+print('线上 P 龙虎榜: %d 天, 最新 %s, 合约 %s' % (len(rank['dates']), rank['dates'][0], day['contract']))
+print('  净多前1:', day['netLong'][0]['name'], day['netLong'][0]['net'])
+print('  净空前1:', day['netShort'][0]['name'], day['netShort'][0]['net'])
+print('  成交量前1:', day['vol'][0]['name'], day['vol'][0]['value'])
