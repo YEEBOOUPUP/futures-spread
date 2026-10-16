@@ -31,12 +31,20 @@ def fetch_json(url):
 
 
 def parse_instrument(inst):
-    """'P2701' → ('P', 2027, 1)；'OI609' → ('OI', 2026, 9)。失败返回 None"""
-    m = re.match(r'^([A-Za-z]+)(\d{2})(\d{2})$', inst)
+    """'P2701' → ('P', 2027, 1)；'OI701' → ('OI', 2027, 1)（郑商所 3 位月份）。失败返回 None"""
+    m = re.match(r'^([A-Za-z]+)(\d{3,4})$', inst)
     if not m:
         return None
-    code, yy, mm = m.group(1).upper(), int(m.group(2)), int(m.group(3))
-    year = 2000 + yy
+    code, digits = m.group(1).upper(), m.group(2)
+    if len(digits) == 3:                       # 郑商所：1 位年份 + 2 位月份
+        year = (datetime.now().year // 10) * 10 + int(digits[0])
+        if year < datetime.now().year - 1:
+            year += 10
+        mm = int(digits[1:])
+    else:
+        year, mm = 2000 + int(digits[:2]), int(digits[2:])
+    if not 1 <= mm <= 12:
+        return None
     return code, year, mm
 
 
@@ -77,25 +85,12 @@ def main():
     if not picks:
         sys.exit('未解析到任何行情（接口可能异常或非交易时段）')
 
-    # 幂等判断：品种文件最后日期 >= trading_day 则跳过
     if trading_day is None:
         trading_day = today
-    last_date = None
-    any_skip = False
-    for code in index['products']:
-        f = os.path.join(DATA_DIR, index['products'][code]['file'])
-        if os.path.exists(f):
-            pf = json.load(open(f, encoding='utf-8'))
-            if pf.get('dates'):
-                d0 = pf['dates'][-1]
-                if last_date is None or d0 > last_date:
-                    last_date = d0
-    if last_date and last_date >= trading_day:
-        print('数据已更新到 %s（今日 %s 无需追加）' % (last_date, trading_day))
-        return
 
-    # 追加到各品种文件
+    # 追加到各品种文件（按品种幂等：该品种最后日期 >= trading_day 才跳过）
     updated = 0
+    skipped = 0
     for code in sorted(index['products']):
         info = index['products'][code]
         f = os.path.join(DATA_DIR, info['file'])
@@ -106,6 +101,7 @@ def main():
         if not month_pick:
             continue
         if pf['dates'] and pf['dates'][-1] >= trading_day:
+            skipped += 1
             continue
         pf['dates'].append(trading_day)
         changed = False
@@ -125,7 +121,8 @@ def main():
     with open(INDEX_FILE, 'w', encoding='utf-8') as f:
         json.dump(index, f, ensure_ascii=False, separators=(',', ':'))
 
-    print('完成：交易日 %s，更新 %d 个品种文件（今日 %s）' % (trading_day, updated, today))
+    print('完成：交易日 %s，更新 %d 个品种文件，跳过 %d 个（今日 %s）'
+          % (trading_day, updated, skipped, today))
 
 
 if __name__ == '__main__':
