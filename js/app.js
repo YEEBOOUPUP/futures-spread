@@ -89,7 +89,7 @@
   });
 
   function bindEvents() {
-    document.querySelectorAll('.mode-btn').forEach(function (btn) {
+    document.querySelectorAll('.mode-switch .mode-btn').forEach(function (btn) {
       btn.addEventListener('click', function () { setMode(btn.dataset.mode); });
     });
     document.querySelectorAll('.view-switch .mode-btn').forEach(function (btn) {
@@ -123,6 +123,9 @@
     $('yearMin').addEventListener('input', onYearRangeInput);
     $('yearMax').addEventListener('input', onYearRangeInput);
     $('yearResetBtn').addEventListener('click', resetYearRange);
+    $('rankDateSel').addEventListener('change', function () {
+      loadRank(state.legA.product, this.value);
+    });
     $('palmMonthSel').addEventListener('change', function () {
       state.palmMonth = this.value;
       renderPalm();
@@ -144,7 +147,7 @@
 
   // ================= 持仓龙虎榜 =================
   /** 加载并渲染选中品种的持仓龙虎榜（新浪：成交量/多单/空单前 20） */
-  function loadRank(product) {
+  function loadRank(product, date) {
     if (!product) { state.rankAvailable = false; syncViewControls(); return; }
     fetch('data/rank/' + product + '.json', { cache: 'no-cache' })
       .then(function (res) {
@@ -152,13 +155,35 @@
         return res.json();
       })
       .then(function (d) {
-        if (!d || !d.vol) { state.rankAvailable = false; syncViewControls(); return; }
-        var dt = String(d.date);
-        $('rankMeta').textContent = (d.contract || product) + ' · ' +
-          dt.slice(0, 4) + '-' + dt.slice(4, 6) + '-' + dt.slice(6, 8);
-        renderRankCol($('rankVolBody'), d.vol);
-        renderRankCol($('rankLongBody'), d.long);
-        renderRankCol($('rankShortBody'), d.short);
+        if (!d) { state.rankAvailable = false; syncViewControls(); return; }
+        // 兼容旧单日结构
+        var dates = d.dates || (d.date ? [d.date] : []);
+        var dataMap = d.data || (d.date ? (function () { var m = {}; m[d.date] = d; return m; })() : {});
+        if (!dates.length) { state.rankAvailable = false; syncViewControls(); return; }
+        var sel = $('rankDateSel');
+        if (sel.dataset.product !== product) {          // 换品种时重建日期下拉
+          sel.innerHTML = '';
+          dates.forEach(function (dt) {
+            var o = document.createElement('option');
+            o.value = dt;
+            o.textContent = dt.slice(0, 4) + '-' + dt.slice(4, 6) + '-' + dt.slice(6, 8);
+            sel.appendChild(o);
+          });
+          sel.dataset.product = product;
+          date = dates[0];
+        }
+        var cur = date || sel.value || dates[0];
+        if (dates.indexOf(cur) < 0) cur = dates[0];
+        sel.value = cur;
+        var day = dataMap[cur];
+        if (!day) { state.rankAvailable = false; syncViewControls(); return; }
+        $('rankMeta').textContent = (day.contract || product) + ' · ' +
+          cur.slice(0, 4) + '-' + cur.slice(4, 6) + '-' + cur.slice(6, 8);
+        renderRankCol($('rankVolBody'), day.vol);
+        renderRankCol($('rankLongBody'), day.long);
+        renderRankCol($('rankShortBody'), day.short);
+        renderNetCol($('rankNetLongBody'), day.netLong);
+        renderNetCol($('rankNetShortBody'), day.netShort);
         state.rankAvailable = true;
         syncViewControls();
       })
@@ -174,6 +199,18 @@
       var chgTxt = chg == null ? '-' : ((chg >= 0 ? '+' : '') + fmtInt(chg));
       tr.innerHTML = '<td>' + r.rank + '</td><td class="rank-name">' + r.name + '</td><td>' +
         fmtInt(r.value) + '</td><td class="' + cls + '">' + chgTxt + '</td>';
+      tbody.appendChild(tr);
+    });
+  }
+
+  /** 净持仓榜单（名次/会员/多单/空单/净） */
+  function renderNetCol(tbody, rows) {
+    tbody.innerHTML = '';
+    (rows || []).slice(0, 20).forEach(function (r) {
+      var tr = document.createElement('tr');
+      var cls = r.net > 0 ? 'pos' : 'neg';
+      tr.innerHTML = '<td>' + r.rank + '</td><td class="rank-name">' + r.name + '</td><td>' +
+        fmtInt(r.long) + '</td><td>' + fmtInt(r.short) + '</td><td class="' + cls + '">' + fmtInt(r.net) + '</td>';
       tbody.appendChild(tr);
     });
   }
@@ -615,7 +652,7 @@
 
   function setMode(mode) {
     state.mode = mode;
-    document.querySelectorAll('.mode-btn').forEach(function (b) {
+    document.querySelectorAll('.mode-switch .mode-btn').forEach(function (b) {
       b.classList.toggle('active', b.dataset.mode === mode);
     });
     if (mode === 'calendar') {
