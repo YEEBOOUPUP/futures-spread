@@ -9,6 +9,7 @@ history_fill.py — 用新浪期货日线重建全市场历史数据（2019 至�
   4. 输出 data/index.json + data/{品种}.json
 
 用法：python collector/history_fill.py
+      python collector/history_fill.py --only OI,RM,SR   # 只重建指定品种（其余品种与 index.json 条目保留）
 依赖：pip install akshare（新浪源）
 """
 import json
@@ -128,8 +129,26 @@ def build_product_series(products, current_year, log=print):
 
 
 def main():
+    args = sys.argv[1:]
+    only = None
+    if '--only' in args:
+        i = args.index('--only')
+        if i + 1 >= len(args):
+            sys.exit('--only 需要品种代码，例如 --only OI,RM,SR')
+        only = [x.strip().upper() for x in re.split(r'[,，\s]+', args[i + 1]) if x.strip()]
+        if not only:
+            sys.exit('--only 需要品种代码，例如 --only OI,RM,SR')
+
     print('=== 期货历史数据重建（新浪，%d 年起）===' % START_YEAR)
     products = get_products()
+    if only:
+        lack = [c for c in only if c not in products]
+        if lack:
+            print('警告：openctp 品种列表里没有 %s' % ','.join(lack))
+        products = {c: products[c] for c in only if c in products}
+        if not products:
+            sys.exit('--only 指定的品种都不可用')
+        print('仅重建 %d 个品种: %s' % (len(products), ','.join(sorted(products))))
     print('品种数: %d' % len(products))
     current_year = int(__import__('datetime').datetime.now().year)
     print('拉取中（预计 20-60 分钟，请耐心等待）...')
@@ -162,6 +181,15 @@ def main():
         }
 
     from datetime import datetime
+    if only:                                   # 局部重建：与现有 index.json 合并，避免抹掉其他品种
+        idx_file = os.path.join(DATA_DIR, 'index.json')
+        if os.path.exists(idx_file):
+            try:
+                merged = dict(json.load(open(idx_file, encoding='utf-8')).get('products', {}))
+            except Exception:                  # noqa: BLE001
+                merged = {}
+            merged.update(index_products)
+            index_products = merged
     index = {
         'updated_at': datetime.now().strftime('%Y-%m-%d %H:%M'),
         'source': 'sina-daily + openctp',
