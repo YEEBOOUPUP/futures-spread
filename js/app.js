@@ -276,8 +276,9 @@
       refreshAsync();
     });
 
-    state.legA.product = prods[0];
-    state.legB.product = prods[1] || prods[0];
+    // 默认展示油脂跨品种价差（棕榈油 − 豆油），数据缺失时退回前两个品种
+    state.legA.product = prods.indexOf('P') >= 0 ? 'P' : prods[0];
+    state.legB.product = prods.indexOf('Y') >= 0 ? 'Y' : (prods[1] || prods[0]);
     state.pickerA.setValue(state.legA.product);
     state.pickerB.setValue(state.legB.product);
     fillContracts('A');
@@ -496,6 +497,7 @@
     state.seasonalEnd = n - 1;
     setSlider($('rangeStart'), 0, n - 1, 0);
     setSlider($('rangeEnd'), 0, n - 1, n - 1);
+    updateRangeUI();   // 同步底部滑块文字/提示（切模式后横轴可能变为合约周期）
   }
 
   /** 季节性图横轴标签：日度海外数据 → 366 天模板；月差 → 合约周期；其余 → 自然年 */
@@ -643,7 +645,7 @@
 
   /** 图表 y 轴配置（应用手动范围；null 时自动） */
   function yScale(extra) {
-    var o = { grid: { color: 'rgba(0,0,0,.05)' } };
+    var o = { grid: { color: 'rgba(90,80,60,.10)' } };
     if (state.yMin != null) o.min = state.yMin;
     if (state.yMax != null) o.max = state.yMax;
     if (extra) for (var k in extra) o[k] = extra[k];
@@ -799,8 +801,8 @@
           var v = ind.years[y][startIdx + k];
           return v == null ? null : v;
         }),
-        borderColor: isLatest ? '#dc2626' : yearColor(i, years.length),
-        backgroundColor: isLatest ? 'rgba(220, 38, 38, .05)' : 'transparent',
+        borderColor: isLatest ? '#c0392b' : yearColor(i, years.length),
+        backgroundColor: isLatest ? 'rgba(192, 57, 43, .06)' : 'transparent',
         pointRadius: 0,
         pointHoverRadius: 3,
         borderWidth: isLatest ? 2.8 : 1.4,
@@ -1009,6 +1011,7 @@
   function syncCalendarLegB() {
     state.legB.product = state.legA.product;
     if (state.pickerB) state.pickerB.setValue(state.legA.product);
+    fillContracts('B');   // 先按新产品重建下拉：旧产品的选项可能不含目标月份，直接赋值会失败
     var info = FuturesData.getProductInfo(state.legA.product);
     var ctrs = info ? info.contracts : [];
     var idx = ctrs.indexOf(state.legA.contract);
@@ -1173,8 +1176,8 @@
     var datasets = [{
       label: label,
       data: spreads,
-      borderColor: '#d92c2c',
-      backgroundColor: 'rgba(217, 44, 44, .07)',
+      borderColor: '#c0392b',
+      backgroundColor: 'rgba(192, 57, 43, .07)',
       fill: true,
       pointRadius: 0,
       borderWidth: 2,
@@ -1195,12 +1198,12 @@
       datasets.push({
         label: 'A 价格',
         data: dates.map(function (d) { return mapA[d] == null ? null : mapA[d]; }),
-        borderColor: '#d92c2c', borderDash: [4, 4], pointRadius: 0, borderWidth: 1, yAxisID: 'y1'
+        borderColor: '#333333', borderDash: [4, 4], pointRadius: 0, borderWidth: 1, yAxisID: 'y1'
       });
       datasets.push({
         label: 'B 价格',
         data: dates.map(function (d) { return mapB[d] == null ? null : mapB[d]; }),
-        borderColor: '#f97316', borderDash: [4, 4], pointRadius: 0, borderWidth: 1, yAxisID: 'y1'
+        borderColor: '#e05600', borderDash: [4, 4], pointRadius: 0, borderWidth: 1, yAxisID: 'y1'
       });
     }
 
@@ -1318,6 +1321,17 @@
     } else {
       // 横轴：年内 MM-DD 全集，按滑块范围截取
       var allLabels = seasonalAllLabels();
+      // 首次渲染时滑块可能尚未按当前数据初始化（seasonalEnd=-1），此处兜底到全区间
+      if (state.seasonalStart < 0) state.seasonalStart = 0;
+      if (state.seasonalEnd < 0 || state.seasonalEnd >= allLabels.length) {
+        state.seasonalStart = 0;
+        state.seasonalEnd = allLabels.length - 1;
+        if (allLabels.length) {
+          setSlider($('rangeStart'), 0, allLabels.length - 1, 0);
+          setSlider($('rangeEnd'), 0, allLabels.length - 1, allLabels.length - 1);
+          updateRangeUI();
+        }
+      }
       labels = allLabels.slice(state.seasonalStart, state.seasonalEnd + 1);
       var labelSet = {};
       labels.forEach(function (l) { labelSet[l] = 1; });
@@ -1331,10 +1345,10 @@
       });
     }
     var years = Object.keys(byYear).sort();
+    initYearRange(years);   // 先按数据年份范围初始化滑轨（切品种时重置为全部），再据此过滤
     // 年份范围过滤（滑轨）：只画范围内的年份
     if (state.yearMin != null) years = years.filter(function (y) { return +y >= state.yearMin; });
     if (state.yearMax != null) years = years.filter(function (y) { return +y <= state.yearMax; });
-    initYearRange(Object.keys(byYear).sort());   // 更新年份滑轨范围（保留当前选择）
 
     var datasets = years.map(function (y, i) {
       var isLatest = i === years.length - 1;   // 最新年份红色加粗高亮
@@ -1345,8 +1359,8 @@
           return cal ? (byYear[y][pos] == null ? null : byYear[y][pos])
                      : (byYear[y][md] == null ? null : byYear[y][md]);
         }),
-        borderColor: isLatest ? '#dc2626' : yearColor(i, years.length),
-        backgroundColor: isLatest ? 'rgba(220, 38, 38, .05)' : 'transparent',
+        borderColor: isLatest ? '#c0392b' : yearColor(i, years.length),
+        backgroundColor: isLatest ? 'rgba(192, 57, 43, .06)' : 'transparent',
         pointRadius: 0,
         pointHoverRadius: 3,
         borderWidth: isLatest ? 2.8 : 1.4,
@@ -1388,8 +1402,24 @@
     }, animate);
   }
 
+  /** 复古终端主题：统一图表字体与配色（Chart 可能由 ensureLibs 延迟加载，故在此处设置） */
+  function applyChartTheme() {
+    if (!window.Chart || Chart.__retroTheme) return;
+    var font = "'Space Grotesk', 'Microsoft YaHei', 'PingFang SC', sans-serif";
+    Chart.defaults.font.family = font;
+    Chart.defaults.color = 'rgba(51, 51, 51, .68)';
+    Chart.defaults.borderColor = 'rgba(90, 80, 60, .12)';
+    Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(47, 44, 40, .94)';
+    Chart.defaults.plugins.tooltip.borderColor = 'rgba(224, 86, 0, .55)';
+    Chart.defaults.plugins.tooltip.borderWidth = 1;
+    Chart.defaults.plugins.tooltip.titleFont = { family: font, size: 11 };
+    Chart.defaults.plugins.tooltip.bodyFont = { family: font, size: 11 };
+    Chart.__retroTheme = true;
+  }
+
   /** 复用 Chart 实例更新数据（不销毁重建，避免闪烁；按 label 继承旧隐藏状态） */
   function updateChart(cfg, animate) {
+    applyChartTheme();
     if (state.chart) {
       var old = state.chart.data.datasets || [];
       var oldHidden = {};
@@ -1418,8 +1448,10 @@
     legend.chart.update();
   }
 
-  /** 为年份分配颜色：黄金角步进（137.5°），相邻年份色相差最大，年份多时辨识度依然高 */
+  /** 为年份分配颜色：年份少时用手工调色板保证辨识度，年份多时用黄金角步进（137.5°） */
+  var YEAR_PALETTE = ['#3b6ea5', '#3f7a4a', '#7a6a2e', '#6b4c8a', '#2f6f6a', '#8a5a3b', '#5a5f8a', '#4a7a7a'];
   function yearColor(i, n) {
+    if (n <= YEAR_PALETTE.length) return YEAR_PALETTE[i];
     var hue = Math.round((i * 137.508 + 15) % 360);
     return 'hsl(' + hue + ', 62%, 42%)';
   }
@@ -1429,6 +1461,12 @@
     if (!years || !years.length) return;
     var nums = years.map(Number).sort(function (a, b) { return a - b; });
     var mn = nums[0], mx = nums[nums.length - 1];
+    // 数据年份范围变化（切品种/合约/模式）时重置为全部，避免沿用旧范围把新年份整段过滤掉
+    if (!state.yearBounds || state.yearBounds.mn !== mn || state.yearBounds.mx !== mx) {
+      state.yearMin = mn;
+      state.yearMax = mx;
+    }
+    state.yearBounds = { mn: mn, mx: mx };
     var yMin = $('yearMin'), yMax = $('yearMax');
     yMin.min = yMax.min = mn;
     yMin.max = yMax.max = mx;
