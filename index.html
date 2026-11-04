@@ -170,6 +170,7 @@
           <div class="view-switch">
             <button class="mode-btn active" data-view="seasonal">季节性图</button>
             <button class="mode-btn" data-view="time">时序图</button>
+            <button class="mode-btn" data-view="heat">季节性热力图</button>
             <button class="mode-btn" data-view="rank">持仓龙虎榜</button>
           </div>
           <div class="yaxis-control">
@@ -235,6 +236,25 @@
         <div class="chart-wrap">
           <canvas id="spreadChart"></canvas>
           <div class="chart-empty" id="chartEmpty">请选择品种与合约</div>
+        </div>
+
+        <div class="heatmap-wrap" id="heatmapWrap" style="display:none">
+          <div class="heatmap-head">
+            <div class="heatmap-title" id="heatmapTitle">年份 × 日期 · 越红越高，越蓝越低</div>
+            <div class="heatmap-modes">
+              <button class="heat-mode active" data-heat="level">数值</button>
+              <button class="heat-mode" data-heat="dev">距年均</button>
+            </div>
+            <div class="heatmap-legend">
+              <span class="heatmap-legend-label" id="heatLegendLow">低</span>
+              <span class="heatmap-legend-bar"></span>
+              <span class="heatmap-legend-label" id="heatLegendHigh">高</span>
+            </div>
+          </div>
+          <div class="heatmap-box" id="heatmapBox">
+            <canvas id="heatmapCanvas"></canvas>
+            <div class="heatmap-tip" id="heatmapTip"></div>
+          </div>
         </div>
 
         <div class="range-control" id="rangeControl">

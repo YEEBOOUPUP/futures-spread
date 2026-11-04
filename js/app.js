@@ -103,6 +103,7 @@
       refreshResult();
     });
     $('swapBtn').addEventListener('click', swapLegs);
+    initHeatHover();
     $('rangeStart').addEventListener('input', function () { onRangeInput('start'); });
     $('rangeEnd').addEventListener('input', function () { onRangeInput('end'); });
     $('rangeResetBtn').addEventListener('click', resetRange);
@@ -526,7 +527,7 @@
       if (which === 'start') { e = s; $('rangeEnd').value = e; }
       else { s = e; $('rangeStart').value = s; }
     }
-    if (state.view === 'seasonal') { state.seasonalStart = s; state.seasonalEnd = e; }
+    if (state.view === 'seasonal' || state.view === 'heat') { state.seasonalStart = s; state.seasonalEnd = e; }
     else { state.rangeStart = s; state.rangeEnd = e; }
     updateRangeUI();
     // 拖动中：每帧合并一次、无动画，保证跟手不卡
@@ -546,7 +547,7 @@
 
   function updateRangeUI() {
     var pctS, pctE, tS, tE;
-    if (state.view === 'seasonal') {
+    if (state.view === 'seasonal' || state.view === 'heat') {
       var labels = seasonalRangeLabels();
       var n = labels.length;
       if (n <= 1) return;
@@ -805,6 +806,16 @@
       setSlider($('rangeStart'), 0, axis.length - 1, state.seasonalStart);
       setSlider($('rangeEnd'), 0, axis.length - 1, state.seasonalEnd);
     }
+    if (state.view === 'heat') {
+      renderHeatmap(labels, years, function (y, i) {
+        var v = ind.years[y][startIdx + i];
+        return v == null ? null : v;
+      }, '年份 × 日期（年内）');
+      $('chartEmpty').style.display = 'none';
+      updateRangeUI();
+      return;
+    }
+
     var datasets = years.map(function (y, i) {
       var isLatest = i === years.length - 1;
       return {
@@ -1002,20 +1013,28 @@
   /** 季节性图只画价差线，禁用"叠加价格线"复选框；时间快捷键仅时序图可见；年份滑轨仅季节性图 */
   function syncViewControls() {
     var isRank = state.view === 'rank';
+    var isFlow = state.mode === 'flow';
+    var isHeat = state.view === 'heat' && !isFlow;
     var chk = $('showPricesChk');
-    chk.disabled = state.view === 'seasonal';
-    $('pricesChkLabel').classList.toggle('disabled', state.view === 'seasonal');
+    var noPrice = state.view === 'seasonal' || isHeat;
+    chk.disabled = noPrice;
+    $('pricesChkLabel').classList.toggle('disabled', noPrice);
     $('rangeQuickBtns').style.display = state.view === 'time' ? 'flex' : 'none';
-    $('yearRangeControl').style.display = state.view === 'seasonal' ? '' : 'none';
-    // 龙虎榜视图：隐藏图表相关区块，只留龙虎榜
+    $('yearRangeControl').style.display = (state.view === 'seasonal' || isHeat) ? '' : 'none';
+    // 龙虎榜视图：隐藏图表相关区块，只留龙虎榜；热力图：用热力图面板替换折线图
     var chartWrap = document.querySelector('.chart-wrap');
-    if (chartWrap) chartWrap.style.display = isRank ? 'none' : '';
-    $('summaryGrid').style.display = isRank ? 'none' : '';
-    $('pricesChkLabel').style.display = isRank ? 'none' : '';
+    if (chartWrap) chartWrap.style.display = (isRank || isHeat) ? 'none' : '';
+    var heatWrap = $('heatmapWrap');
+    if (heatWrap) heatWrap.style.display = isHeat ? '' : 'none';
+    if (!isHeat) hideHeatTip();
+    var vs = document.querySelector('.view-switch');
+    if (vs) vs.style.display = isFlow ? 'none' : '';
+    $('summaryGrid').style.display = (isRank || isFlow) ? 'none' : '';
+    $('pricesChkLabel').style.display = (isRank || isFlow) ? 'none' : '';
     var rangeControl = $('rangeControl');
     if (rangeControl) rangeControl.style.display = isRank ? 'none' : '';
     var tableWrap = document.querySelector('.table-wrap');
-    if (tableWrap) tableWrap.style.display = isRank ? 'none' : '';
+    if (tableWrap) tableWrap.style.display = (isRank || isFlow) ? 'none' : '';
     $('rankCard').style.display = (isRank && state.rankAvailable) ? '' : 'none';
     $('rankEmpty').style.display = (isRank && !state.rankAvailable) ? '' : 'none';
   }
@@ -1181,7 +1200,7 @@
   }
 
   function renderChart(joined, pA, pB, label, animate) {
-    if (state.view === 'seasonal') { renderSeasonalChart(joined, label, animate); return; }
+    if (state.view === 'seasonal' || state.view === 'heat') { renderSeasonalChart(joined, label, animate); return; }
 
     var dates = joined.map(function (r) { return r.date; });
     var spreads = joined.map(function (r) { return r.spread; });
@@ -1305,6 +1324,184 @@
     };
   }
 
+  // ================= 季节性热力图（年份 × 日期） =================
+  /** 绘制热力图：labels 为横轴，years 为纵向年份，valueAt(year, i) 取值 */
+  function renderHeatmap(labels, years, valueAt, title) {
+    state.heat = { labels: labels.slice(), years: years.slice(), valueAt: valueAt, title: title || '年份 × 日期（年内）' };
+    var wrap = $('heatmapWrap');
+    if (wrap) wrap.style.display = '';
+    $('chartEmpty').style.display = 'none';
+    drawHeatmap();
+  }
+
+  function heatQuantile(sorted, q) {
+    if (!sorted.length) return 0;
+    var pos = (sorted.length - 1) * q;
+    var lo = Math.floor(pos), hi = Math.ceil(pos);
+    if (lo === hi) return sorted[lo];
+    return sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo);
+  }
+
+  /** t∈[0,1]：0 低（蓝）→ 0.5 中性（近白）→ 1 高（红） */
+  function heatColor(t) {
+    t = Math.max(0, Math.min(1, t));
+    var a = t < .5 ? [37, 99, 235] : [232, 237, 244];
+    var b = t < .5 ? [232, 237, 244] : [220, 38, 38];
+    var u = t < .5 ? t / .5 : (t - .5) / .5;
+    return 'rgb(' + Math.round(a[0] + (b[0] - a[0]) * u) + ',' +
+                    Math.round(a[1] + (b[1] - a[1]) * u) + ',' +
+                    Math.round(a[2] + (b[2] - a[2]) * u) + ')';
+  }
+
+  function drawHeatmap() {
+    var cv = $('heatmapCanvas'), box = $('heatmapBox');
+    if (!cv || !box || !state.heat) return;
+    var h = state.heat, labels = h.labels, years = h.years;
+    var rows = years.length, cols = labels.length;
+    if (!rows || !cols) { cv.style.height = '0px'; return; }
+
+    // 先生成矩阵（按年份倒序：最新在上），并在年内做前值填充（周末/节假日）
+    var grid = [], used = [];
+    for (var r0 = 0; r0 < rows; r0++) {
+      var y0 = years[rows - 1 - r0];
+      var line = new Array(cols), lastIdx = -1, prev = null;
+      for (var k = 0; k < cols; k++) if (h.valueAt(y0, k) != null) lastIdx = k;
+      for (var c0 = 0; c0 < cols; c0++) {
+        var v0 = h.valueAt(y0, c0);
+        if (v0 != null) prev = v0;
+        else if (c0 < lastIdx && prev != null) v0 = prev;   // 只填内缺口，不越过末点
+        line[c0] = v0;
+        if (v0 != null) used.push(v0);
+      }
+      grid.push(line);
+    }
+    if (!used.length) { cv.style.height = '0px'; return; }
+
+    // 距年均：减掉当年均值，突出“年内哪段偏高/偏低”
+    var dev = state.heatMode === 'dev';
+    var titleEl = $('heatmapTitle');
+    if (titleEl) titleEl.textContent = h.title + (dev ? ' · 红=高于年均，蓝=低于年均' : ' · 越红越高，越蓝越低');
+    if (dev) {
+      used = [];
+      for (var r1 = 0; r1 < rows; r1++) {
+        var sum = 0, cnt = 0;
+        for (var c1 = 0; c1 < cols; c1++) {
+          var v1 = grid[r1][c1];
+          if (v1 != null) { sum += v1; cnt++; }
+        }
+        var avg = cnt ? sum / cnt : 0;
+        for (var c2 = 0; c2 < cols; c2++) {
+          if (grid[r1][c2] != null) { grid[r1][c2] -= avg; used.push(grid[r1][c2]); }
+        }
+      }
+    }
+
+    used.sort(function (a, b) { return a - b; });
+    var lo, hi;
+    if (dev) {
+      var m = Math.max(Math.abs(heatQuantile(used, .05)), Math.abs(heatQuantile(used, .95)));
+      if (!(m > 0)) m = 1e-6;
+      lo = -m; hi = m;
+    } else {
+      lo = heatQuantile(used, .02); hi = heatQuantile(used, .98);
+      if (!(hi > lo)) { lo = used[0]; hi = used[used.length - 1]; }
+      if (!(hi > lo)) hi = lo + 1;
+    }
+    $('heatLegendLow').textContent = (dev && lo > 0 ? '+' : '') + fmtNum(lo);
+    $('heatLegendHigh').textContent = (dev && hi > 0 ? '+' : '') + fmtNum(hi);
+
+    var cssW = box.clientWidth || 800;
+    var rowH = rows > 12 ? 16 : (rows > 8 ? 20 : 26);
+    var left = 46, right = 6, top = 6, bottom = 26;
+    var cssH = top + rows * rowH + bottom;
+    var dpr = window.devicePixelRatio || 1;
+    cv.width = Math.max(1, Math.round(cssW * dpr));
+    cv.height = Math.max(1, Math.round(cssH * dpr));
+    cv.style.height = cssH + 'px';
+    var ctx = cv.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, cssW, cssH);
+
+    var cw = (cssW - left - right) / cols;
+    state.heatGeom = {
+      left: left, top: top, cw: cw, rowH: rowH, cols: cols, rows: rows,
+      years: years, grid: grid, dev: dev, lo: lo, hi: hi, cssW: cssW
+    };
+
+    ctx.font = '11px ' + getComputedStyle(document.body).fontFamily;
+    ctx.textBaseline = 'middle';
+
+    for (var r = 0; r < rows; r++) {
+      var yTop = top + r * rowH;
+      ctx.fillStyle = '#6b7280';
+      ctx.textAlign = 'right';
+      ctx.fillText(years[rows - 1 - r] + '年', left - 8, yTop + rowH / 2);
+      for (var c = 0; c < cols; c++) {
+        var v = grid[r][c];
+        if (v == null) continue;                 // 无数据：留白，与中性色区分
+        ctx.fillStyle = heatColor((v - lo) / (hi - lo));
+        var wpx = cw > 4 ? Math.ceil(cw) - 1 : Math.ceil(cw);
+        ctx.fillRect(Math.round(left + c * cw), Math.round(yTop), Math.max(1, wpx), Math.max(1, rowH - 1));
+      }
+    }
+
+    // 横轴刻度（自动稀疏，窄屏不重叠）
+    var maxTicks = Math.max(3, Math.min(12, Math.floor((cssW - left - right) / 80)));
+    var step = Math.max(1, Math.ceil(cols / maxTicks));
+    ctx.fillStyle = '#6b7280';
+    ctx.textAlign = 'center';
+    for (var i = 0; i < cols; i += step) {
+      var lx = left + (i + .5) * cw;
+      ctx.fillText(labels[i], Math.min(cssW - 24, Math.max(left + 16, lx)), top + rows * rowH + 14);
+    }
+  }
+
+  function hideHeatTip() {
+    var tip = $('heatmapTip');
+    if (tip) tip.classList.remove('show');
+  }
+
+  function setHeatMode(mode) {
+    state.heatMode = mode === 'dev' ? 'dev' : 'level';
+    document.querySelectorAll('.heat-mode').forEach(function (b) {
+      b.classList.toggle('active', b.dataset.heat === state.heatMode);
+    });
+    drawHeatmap();
+  }
+
+  function initHeatHover() {
+    document.querySelectorAll('.heat-mode').forEach(function (b) {
+      b.addEventListener('click', function () { setHeatMode(b.dataset.heat); });
+    });
+    var cv = $('heatmapCanvas'), box = $('heatmapBox'), tip = $('heatmapTip');
+    if (!cv || !box || !tip) return;
+    cv.addEventListener('mousemove', function (e) {
+      var g = state.heatGeom, h = state.heat;
+      if (!g || !h) return;
+      var rect = cv.getBoundingClientRect();
+      var x = e.clientX - rect.left, y = e.clientY - rect.top;
+      var c = Math.floor((x - g.left) / g.cw);
+      var r = Math.floor((y - g.top) / g.rowH);
+      if (c < 0 || c >= g.cols || r < 0 || r >= g.rows) { hideHeatTip(); return; }
+      var year = g.years[g.rows - 1 - r];
+      var v = g.grid[r][c];
+      if (v == null) { hideHeatTip(); return; }
+      tip.textContent = year + '年 ' + g.labels[c] + ' · ' + (g.dev ? (v >= 0 ? '+' : '') + fmtNum(v) + '（较年均）' : fmtNum(v));
+      var px = Math.min(g.cssW - 70, Math.max(70, g.left + (c + .5) * g.cw));
+      tip.style.left = px + 'px';
+      tip.style.top = (g.top + r * g.rowH) + 'px';
+      tip.style.transform = r === 0 ? 'translate(-50%, 10px)' : 'translate(-50%, -130%)';
+      tip.classList.add('show');
+    });
+    cv.addEventListener('mouseleave', hideHeatTip);
+    var t = null;
+    window.addEventListener('resize', function () {
+      if (state.view !== 'heat') return;
+      clearTimeout(t);
+      t = setTimeout(drawHeatmap, 120);
+    });
+  }
+
   function renderSeasonalChart(joined, label, animate) {
     var cal = state.mode === 'calendar' ? calendarSeasonalMeta() : null;
     var labels, byYear;
@@ -1361,6 +1558,17 @@
     // 年份范围过滤（滑轨）：只画范围内的年份
     if (state.yearMin != null) years = years.filter(function (y) { return +y >= state.yearMin; });
     if (state.yearMax != null) years = years.filter(function (y) { return +y <= state.yearMax; });
+
+    if (state.view === 'heat') {
+      renderHeatmap(labels, years, function (y, i) {
+        var pos = cal ? state.seasonalStart + i : labels[i];
+        var row = byYear[y];
+        if (!row) return null;
+        var v = row[pos];
+        return v == null ? null : v;
+      }, cal ? '年份 × 合约周期' : '年份 × 日期（年内）');
+      return;
+    }
 
     var datasets = years.map(function (y, i) {
       var isLatest = i === years.length - 1;   // 最新年份红色加粗高亮

@@ -628,14 +628,17 @@ section[id] { scroll-margin-top: calc(var(--header-h) + 16px); }
 
 .view-switch {
   display: inline-flex;
+  flex-wrap: wrap;
   gap: 2px;
   padding: 3px;
   border-radius: var(--radius);
   background-color: var(--gray-100);
+  max-width: 100%;
 }
 
 .view-switch .mode-btn {
   width: auto;
+  white-space: nowrap;
   padding: 6px 12px;
   border-radius: var(--radius-sm);
   font-size: 12.5px;
@@ -919,6 +922,113 @@ section[id] { scroll-margin-top: calc(var(--header-h) + 16px); }
   font-size: 13px;
   background-color: #fff;
   border-radius: var(--radius-lg);
+}
+
+/* ---------- 季节性热力图 ---------- */
+.heatmap-wrap {
+  margin-top: 12px;
+  padding: 14px 16px 10px;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg);
+  background-color: #fff;
+}
+
+.heatmap-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+
+.heatmap-title {
+  font-size: 12px;
+  color: var(--gray-500);
+}
+
+.heatmap-modes {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 7px;
+  background-color: var(--gray-100);
+}
+
+.heat-mode {
+  padding: 3px 10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--gray-500);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background-color .15s ease, color .15s ease;
+}
+
+.heat-mode:hover { color: var(--gray-700, #374151); }
+
+.heat-mode.active {
+  background-color: #fff;
+  color: var(--blue-700);
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+
+.heatmap-legend {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--gray-500);
+}
+
+.heatmap-legend-bar {
+  display: block;
+  width: 120px;
+  height: 8px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #2563eb 0%, #f8fafc 50%, #dc2626 100%);
+}
+
+.heatmap-box {
+  position: relative;
+  width: 100%;
+}
+
+#heatmapCanvas {
+  display: block;
+  width: 100%;
+  cursor: crosshair;
+}
+
+.heatmap-tip {
+  position: absolute;
+  z-index: 6;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background-color: #111827;
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -130%);
+  transition: opacity .12s ease;
+}
+
+.heatmap-tip.show { opacity: 1; }
+
+@media (max-width: 760px) {
+  .heatmap-wrap { padding: 12px 12px 8px; }
+  .heatmap-legend-bar { width: 80px; }
+  .heatmap-title { font-size: 11px; }
+  .heatmap-head { flex-wrap: wrap; row-gap: 6px; }
+  .heatmap-title { flex: 1 1 100%; }
+  .heatmap-legend { margin-left: auto; }
 }
 
 /* 明细表 */
