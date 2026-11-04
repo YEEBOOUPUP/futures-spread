@@ -1429,7 +1429,47 @@
     Chart.defaults.plugins.tooltip.padding = 10;
     Chart.defaults.plugins.tooltip.titleFont = { family: font, size: 11 };
     Chart.defaults.plugins.tooltip.bodyFont = { family: font, size: 11 };
+
+    // 图例悬停：加粗该年份曲线并绘制到最前面；图例顺序始终按数据顺序，避免悬停时跳动
+    var baseLabels = Chart.defaults.plugins.legend.labels.generateLabels;
+    Chart.defaults.plugins.legend.labels.generateLabels = function (chart) {
+      var items = baseLabels ? baseLabels.call(this, chart) : [];
+      return items.slice().sort(function (a, b) {
+        return (a.datasetIndex == null ? 0 : a.datasetIndex) - (b.datasetIndex == null ? 0 : b.datasetIndex);
+      });
+    };
+    Chart.defaults.plugins.legend.onHover = function (evt, item, legend) {
+      var chart = legend && legend.chart;
+      if (!chart) return;
+      applyYearHover(chart, item && !item.hidden && item.datasetIndex != null ? item.datasetIndex : null);
+      if (chart.canvas) chart.canvas.style.cursor = 'pointer';
+    };
+    Chart.defaults.plugins.legend.onLeave = function (evt, item, legend) {
+      var chart = legend && legend.chart;
+      if (!chart) return;
+      applyYearHover(chart, null);
+      if (chart.canvas) chart.canvas.style.cursor = '';
+    };
     Chart.__corporateTheme = true;
+  }
+
+  /** 图例悬停高亮：加粗目标曲线并用更小的 order 让它绘制在最前（order 越小越晚绘制） */
+  function applyYearHover(chart, idx) {
+    if (!chart || chart.__hoverIdx === idx) return;
+    chart.__hoverIdx = idx;
+    var dss = chart.data.datasets || [];
+    for (var i = 0; i < dss.length; i++) {
+      var ds = dss[i];
+      if (ds.__baseWidth == null) ds.__baseWidth = ds.borderWidth == null ? 1.6 : ds.borderWidth;
+      if (idx != null && i === idx) {
+        ds.borderWidth = Math.max(ds.__baseWidth, 3.6);
+        ds.order = -1;
+      } else {
+        ds.borderWidth = ds.__baseWidth;
+        ds.order = 0;
+      }
+    }
+    chart.update('none');
   }
 
   /** 复用 Chart 实例更新数据（不销毁重建，避免闪烁；按 label 继承旧隐藏状态） */
@@ -1446,6 +1486,7 @@
       });
       state.chart.config.data = cfg.data;
       state.chart.config.options = cfg.options;
+      state.chart.__hoverIdx = null;
       state.chart.update(animate === false ? 'none' : undefined);
     } else {
       state.chart = new Chart($('spreadChart'), cfg);
@@ -1464,13 +1505,13 @@
   }
 
   /** 为年份分配颜色：年份少时用手工调色板保证辨识度，年份多时用黄金角步进（137.5°） */
-  var YEAR_PALETTE = ['#1e3a8a', '#1d4ed8', '#2563eb', '#3b82f6', '#60a5fa', '#0f766e', '#0d9488', '#0891b2'];
+  var YEAR_PALETTE = ['#2563eb', '#0d9488', '#d97706', '#7c3aed', '#475569', '#65a30d', '#a21caf', '#92400e'];
   function yearColor(i, n) {
     if (n <= YEAR_PALETTE.length) return YEAR_PALETTE[i];
-    // 年份多于 8 条时收敛到蓝—青—灰的冷色区间，避免出现彩虹色
-    var hue2 = 200 + (i % 6) * 9;
-    var light = 30 + (i % 5) * 9;
-    return 'hsl(' + hue2 + ', 45%, ' + light + '%)';
+    // 年份多时按黄金角分布色相，保持彼此可分辨（避免 20 年全挤在同一色系）
+    var hue = Math.round((i * 137.508 + 15) % 360);
+    var light = 38 + (i % 3) * 7;
+    return 'hsl(' + hue + ', 46%, ' + light + '%)';
   }
 
   /** 年份范围滑轨：初始化 min/max（数据实际年份），保留用户当前选择并夹紧 */
