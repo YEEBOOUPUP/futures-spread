@@ -45,7 +45,6 @@
   // ================= 依赖加载（本地库优先，缺失回退 CDN） =================
   function ensureLibs(cb) {
     var pending = [];
-    if (!window.XLSX) pending.push({ local: 'js/xlsx.full.min.js', cdn: CDN.xlsx, ok: function () { return !!window.XLSX; } });
     if (!window.Chart) pending.push({ local: 'js/chart.umd.js', cdn: CDN.chart, ok: function () { return !!window.Chart; } });
     loadNext(pending, cb);
   }
@@ -645,7 +644,7 @@
 
   /** 图表 y 轴配置（应用手动范围；null 时自动） */
   function yScale(extra) {
-    var o = { grid: { color: 'rgba(215,196,183,.42)' } };
+    var o = { grid: { color: 'rgba(229,231,235,.85)' } };
     if (state.yMin != null) o.min = state.yMin;
     if (state.yMax != null) o.max = state.yMax;
     if (extra) for (var k in extra) o[k] = extra[k];
@@ -666,6 +665,8 @@
       if (legB) legB.style.display = 'none';
       var opEl = $('opBlock');
       if (opEl) opEl.style.display = 'none';
+      var sw1 = document.querySelector('.swap-wrap');
+      if (sw1) sw1.style.display = 'none';
       if (state.pickerB) state.pickerB.setDisabled(true);
       $('legHint').textContent = '品种价格 = 所选品种合约的单边价格（默认主力合约），可直接搜索切换品种';
       $('modeShortcuts').innerHTML = '';
@@ -675,6 +676,8 @@
       if (legB2) legB2.style.display = '';
       var opEl2 = $('opBlock');
       if (opEl2) opEl2.style.display = '';
+      var sw2 = document.querySelector('.swap-wrap');
+      if (sw2) sw2.style.display = '';
       if (state.pickerB) state.pickerB.setDisabled(false);
       if (mode === 'ratio') {
         $('legHint').textContent = '油粕比 = 油脂 A ÷ 粕类 B（A 选 P/Y/OI，B 选 M/RM），月份合约 01/03/05/07/09/11';
@@ -688,6 +691,8 @@
     var hideLegs = isFlow || mode === 'palm';
     var legs = document.querySelector('.legs');
     if (legs) legs.style.display = hideLegs ? 'none' : '';
+    var legField = legs ? legs.closest('.field-group') : null;
+    if (legField) legField.style.display = hideLegs ? 'none' : '';
     var fc = $('flowControl');
     if (fc) fc.style.display = isFlow ? '' : 'none';
     var pc = $('palmControl');
@@ -801,8 +806,8 @@
           var v = ind.years[y][startIdx + k];
           return v == null ? null : v;
         }),
-        borderColor: isLatest ? '#c15a42' : yearColor(i, years.length),
-        backgroundColor: isLatest ? 'rgba(193, 90, 66, .07)' : 'transparent',
+        borderColor: isLatest ? '#dc2626' : yearColor(i, years.length),
+        backgroundColor: isLatest ? 'rgba(220, 38, 38, .06)' : 'transparent',
         pointRadius: 0,
         pointHoverRadius: 3,
         borderWidth: isLatest ? 2.8 : 1.6,
@@ -1176,8 +1181,8 @@
     var datasets = [{
       label: label,
       data: spreads,
-      borderColor: '#c15a42',
-      backgroundColor: 'rgba(193, 90, 66, .08)',
+      borderColor: '#2563eb',
+      backgroundColor: 'rgba(37, 99, 235, .07)',
       fill: true,
       pointRadius: 0,
       borderWidth: 2,
@@ -1198,12 +1203,12 @@
       datasets.push({
         label: 'A 价格',
         data: dates.map(function (d) { return mapA[d] == null ? null : mapA[d]; }),
-        borderColor: '#4a5d23', borderDash: [4, 4], pointRadius: 0, borderWidth: 1, yAxisID: 'y1'
+        borderColor: '#334155', borderDash: [4, 4], pointRadius: 0, borderWidth: 1, yAxisID: 'y1'
       });
       datasets.push({
         label: 'B 价格',
         data: dates.map(function (d) { return mapB[d] == null ? null : mapB[d]; }),
-        borderColor: '#e2725b', borderDash: [4, 4], pointRadius: 0, borderWidth: 1, yAxisID: 'y1'
+        borderColor: '#0ea5e9', borderDash: [4, 4], pointRadius: 0, borderWidth: 1, yAxisID: 'y1'
       });
     }
 
@@ -1359,8 +1364,8 @@
           return cal ? (byYear[y][pos] == null ? null : byYear[y][pos])
                      : (byYear[y][md] == null ? null : byYear[y][md]);
         }),
-        borderColor: isLatest ? '#c15a42' : yearColor(i, years.length),
-        backgroundColor: isLatest ? 'rgba(193, 90, 66, .07)' : 'transparent',
+        borderColor: isLatest ? '#dc2626' : yearColor(i, years.length),
+        backgroundColor: isLatest ? 'rgba(220, 38, 38, .06)' : 'transparent',
         pointRadius: 0,
         pointHoverRadius: 3,
         borderWidth: isLatest ? 2.8 : 1.6,
@@ -1402,22 +1407,22 @@
     }, animate);
   }
 
-  /** 有机现代主义主题：统一图表字体与配色（Chart 可能由 ensureLibs 延迟加载，故在此处设置） */
+  /** 企业简洁主题：统一图表字体与配色（Chart 可能由 ensureLibs 延迟加载，故在此处设置） */
   function applyChartTheme() {
-    if (!window.Chart || Chart.__organicTheme) return;
-    var font = "'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif";
+    if (!window.Chart || Chart.__corporateTheme) return;
+    var font = "system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif";
     Chart.defaults.font.family = font;
     Chart.defaults.font.size = 11;
-    Chart.defaults.color = 'rgba(58, 67, 34, .66)';
-    Chart.defaults.borderColor = 'rgba(215, 196, 183, .45)';
-    Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(58, 67, 34, .94)';
-    Chart.defaults.plugins.tooltip.borderColor = 'rgba(226, 114, 91, .55)';
+    Chart.defaults.color = '#6b7280';
+    Chart.defaults.borderColor = 'rgba(229, 231, 235, .9)';
+    Chart.defaults.plugins.tooltip.backgroundColor = '#111827';
+    Chart.defaults.plugins.tooltip.borderColor = '#374151';
     Chart.defaults.plugins.tooltip.borderWidth = 1;
-    Chart.defaults.plugins.tooltip.cornerRadius = 12;
+    Chart.defaults.plugins.tooltip.cornerRadius = 8;
     Chart.defaults.plugins.tooltip.padding = 10;
     Chart.defaults.plugins.tooltip.titleFont = { family: font, size: 11 };
     Chart.defaults.plugins.tooltip.bodyFont = { family: font, size: 11 };
-    Chart.__organicTheme = true;
+    Chart.__corporateTheme = true;
   }
 
   /** 复用 Chart 实例更新数据（不销毁重建，避免闪烁；按 label 继承旧隐藏状态） */
@@ -1452,11 +1457,13 @@
   }
 
   /** 为年份分配颜色：年份少时用手工调色板保证辨识度，年份多时用黄金角步进（137.5°） */
-  var YEAR_PALETTE = ['#3f6b3a', '#8a9a5b', '#c1553c', '#7a6248', '#4e7a78', '#b5874f', '#6e8a2f', '#8e5e72'];
+  var YEAR_PALETTE = ['#1e3a8a', '#1d4ed8', '#2563eb', '#3b82f6', '#60a5fa', '#0f766e', '#0d9488', '#0891b2'];
   function yearColor(i, n) {
     if (n <= YEAR_PALETTE.length) return YEAR_PALETTE[i];
-    var hue = Math.round((i * 137.508 + 15) % 360);
-    return 'hsl(' + hue + ', 34%, 42%)';
+    // 年份多于 8 条时收敛到蓝—青—灰的冷色区间，避免出现彩虹色
+    var hue2 = 200 + (i % 6) * 9;
+    var light = 30 + (i % 5) * 9;
+    return 'hsl(' + hue2 + ', 45%, ' + light + '%)';
   }
 
   /** 年份范围滑轨：初始化 min/max（数据实际年份），保留用户当前选择并夹紧 */
