@@ -53,11 +53,16 @@ if errorlevel 1 echo   *** 汇率提取失败，继续后续步骤 ***
 
 echo.
 echo 推送到 GitHub ...
-git add -A
+git add data
 git commit -m "Excel data update %date% %time%"
-if errorlevel 1 echo   *** 无数据变化，跳过推送 ***
-git push origin main
-echo.
-echo 完成！网站 1-3 分钟后自动更新
+if errorlevel 1 echo   *** 无数据变化，跳过提交 ***
+git -c credential.helper= -c credential.helper=manager push origin main
+if errorlevel 1 (
+  echo.
+  echo   *** 推送失败：请检查网络或 GitHub 登录状态 ***
+) else (
+  echo.
+  echo 完成，网站 1-3 分钟后自动更新
+)
 echo.
 pause
