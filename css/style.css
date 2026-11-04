@@ -1278,6 +1278,7 @@ section[id] { scroll-margin-top: calc(var(--header-h) + 16px); }
   .result-head h2 { font-size: 17px; }
   .chart-tools { gap: 10px; }
   .yaxis-control input[type="number"] { width: 72px; }
+  .header-actions { flex-basis: 100%; justify-content: flex-end; }
   .footer-cols { grid-template-columns: minmax(0, 1fr); }
 }
 

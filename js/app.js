@@ -642,6 +642,13 @@
     refreshResult();
   }
 
+  /** 横轴刻度数量随图表宽度收敛，窄屏避免标签重叠 */
+  function xTickLimit() {
+    var box = document.querySelector('.chart-wrap');
+    var w = box ? box.clientWidth : 900;
+    return Math.max(4, Math.min(12, Math.round(w / 100)));
+  }
+
   /** 图表 y 轴配置（应用手动范围；null 时自动） */
   function yScale(extra) {
     var o = { grid: { color: 'rgba(229,231,235,.85)' } };
@@ -838,7 +845,7 @@
         scales: {
           x: {
             title: { display: true, text: '日期（年内，MM-DD）', font: { size: 11 } },
-            ticks: { maxTicksLimit: 12, maxRotation: 0, autoSkip: true },
+            ticks: { maxTicksLimit: xTickLimit(), maxRotation: 0, autoSkip: true },
             grid: { display: false }
           },
           y: yScale({})
@@ -1235,7 +1242,7 @@
           }
         },
         scales: {
-          x: { ticks: { maxTicksLimit: 12, maxRotation: 0 }, grid: { display: false } },
+          x: { ticks: { maxTicksLimit: xTickLimit(), maxRotation: 0 }, grid: { display: false } },
           y: yScale({ position: 'left' }),
           y1: { position: 'right', display: showPrices, grid: { drawOnChartArea: false } }
         }
@@ -1398,7 +1405,7 @@
         scales: {
           x: {
             title: { display: true, text: cal ? ('合约周期：' + cal.rangeLabel) : '日期（年内，MM-DD）', font: { size: 11 } },
-            ticks: { maxTicksLimit: 12, maxRotation: 0, autoSkip: true },
+            ticks: { maxTicksLimit: xTickLimit(), maxRotation: 0, autoSkip: true },
             grid: { display: false }
           },
           y: yScale({})
