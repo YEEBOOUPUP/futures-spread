@@ -645,7 +645,7 @@
 
   /** 图表 y 轴配置（应用手动范围；null 时自动） */
   function yScale(extra) {
-    var o = { grid: { color: 'rgba(90,80,60,.10)' } };
+    var o = { grid: { color: 'rgba(215,196,183,.42)' } };
     if (state.yMin != null) o.min = state.yMin;
     if (state.yMax != null) o.max = state.yMax;
     if (extra) for (var k in extra) o[k] = extra[k];
@@ -801,11 +801,11 @@
           var v = ind.years[y][startIdx + k];
           return v == null ? null : v;
         }),
-        borderColor: isLatest ? '#c0392b' : yearColor(i, years.length),
-        backgroundColor: isLatest ? 'rgba(192, 57, 43, .06)' : 'transparent',
+        borderColor: isLatest ? '#c15a42' : yearColor(i, years.length),
+        backgroundColor: isLatest ? 'rgba(193, 90, 66, .07)' : 'transparent',
         pointRadius: 0,
         pointHoverRadius: 3,
-        borderWidth: isLatest ? 2.8 : 1.4,
+        borderWidth: isLatest ? 2.8 : 1.6,
         tension: 0.1,
         spanGaps: true,
         hidden: !!state.hiddenYears[y]
@@ -1176,8 +1176,8 @@
     var datasets = [{
       label: label,
       data: spreads,
-      borderColor: '#c0392b',
-      backgroundColor: 'rgba(192, 57, 43, .07)',
+      borderColor: '#c15a42',
+      backgroundColor: 'rgba(193, 90, 66, .08)',
       fill: true,
       pointRadius: 0,
       borderWidth: 2,
@@ -1198,12 +1198,12 @@
       datasets.push({
         label: 'A 价格',
         data: dates.map(function (d) { return mapA[d] == null ? null : mapA[d]; }),
-        borderColor: '#333333', borderDash: [4, 4], pointRadius: 0, borderWidth: 1, yAxisID: 'y1'
+        borderColor: '#4a5d23', borderDash: [4, 4], pointRadius: 0, borderWidth: 1, yAxisID: 'y1'
       });
       datasets.push({
         label: 'B 价格',
         data: dates.map(function (d) { return mapB[d] == null ? null : mapB[d]; }),
-        borderColor: '#e05600', borderDash: [4, 4], pointRadius: 0, borderWidth: 1, yAxisID: 'y1'
+        borderColor: '#e2725b', borderDash: [4, 4], pointRadius: 0, borderWidth: 1, yAxisID: 'y1'
       });
     }
 
@@ -1359,11 +1359,11 @@
           return cal ? (byYear[y][pos] == null ? null : byYear[y][pos])
                      : (byYear[y][md] == null ? null : byYear[y][md]);
         }),
-        borderColor: isLatest ? '#c0392b' : yearColor(i, years.length),
-        backgroundColor: isLatest ? 'rgba(192, 57, 43, .06)' : 'transparent',
+        borderColor: isLatest ? '#c15a42' : yearColor(i, years.length),
+        backgroundColor: isLatest ? 'rgba(193, 90, 66, .07)' : 'transparent',
         pointRadius: 0,
         pointHoverRadius: 3,
-        borderWidth: isLatest ? 2.8 : 1.4,
+        borderWidth: isLatest ? 2.8 : 1.6,
         tension: 0.1,
         spanGaps: true,                     // 跨过 null（节假日）连续绘制
         hidden: !!state.hiddenYears[y]      // 恢复用户在图例上隐藏的年份
@@ -1402,19 +1402,22 @@
     }, animate);
   }
 
-  /** 复古终端主题：统一图表字体与配色（Chart 可能由 ensureLibs 延迟加载，故在此处设置） */
+  /** 有机现代主义主题：统一图表字体与配色（Chart 可能由 ensureLibs 延迟加载，故在此处设置） */
   function applyChartTheme() {
-    if (!window.Chart || Chart.__retroTheme) return;
-    var font = "'Space Grotesk', 'Microsoft YaHei', 'PingFang SC', sans-serif";
+    if (!window.Chart || Chart.__organicTheme) return;
+    var font = "'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif";
     Chart.defaults.font.family = font;
-    Chart.defaults.color = 'rgba(51, 51, 51, .68)';
-    Chart.defaults.borderColor = 'rgba(90, 80, 60, .12)';
-    Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(47, 44, 40, .94)';
-    Chart.defaults.plugins.tooltip.borderColor = 'rgba(224, 86, 0, .55)';
+    Chart.defaults.font.size = 11;
+    Chart.defaults.color = 'rgba(58, 67, 34, .66)';
+    Chart.defaults.borderColor = 'rgba(215, 196, 183, .45)';
+    Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(58, 67, 34, .94)';
+    Chart.defaults.plugins.tooltip.borderColor = 'rgba(226, 114, 91, .55)';
     Chart.defaults.plugins.tooltip.borderWidth = 1;
+    Chart.defaults.plugins.tooltip.cornerRadius = 12;
+    Chart.defaults.plugins.tooltip.padding = 10;
     Chart.defaults.plugins.tooltip.titleFont = { family: font, size: 11 };
     Chart.defaults.plugins.tooltip.bodyFont = { family: font, size: 11 };
-    Chart.__retroTheme = true;
+    Chart.__organicTheme = true;
   }
 
   /** 复用 Chart 实例更新数据（不销毁重建，避免闪烁；按 label 继承旧隐藏状态） */
@@ -1449,11 +1452,11 @@
   }
 
   /** 为年份分配颜色：年份少时用手工调色板保证辨识度，年份多时用黄金角步进（137.5°） */
-  var YEAR_PALETTE = ['#3b6ea5', '#3f7a4a', '#7a6a2e', '#6b4c8a', '#2f6f6a', '#8a5a3b', '#5a5f8a', '#4a7a7a'];
+  var YEAR_PALETTE = ['#3f6b3a', '#8a9a5b', '#c1553c', '#7a6248', '#4e7a78', '#b5874f', '#6e8a2f', '#8e5e72'];
   function yearColor(i, n) {
     if (n <= YEAR_PALETTE.length) return YEAR_PALETTE[i];
     var hue = Math.round((i * 137.508 + 15) % 360);
-    return 'hsl(' + hue + ', 62%, 42%)';
+    return 'hsl(' + hue + ', 34%, 42%)';
   }
 
   /** 年份范围滑轨：初始化 min/max（数据实际年份），保留用户当前选择并夹紧 */

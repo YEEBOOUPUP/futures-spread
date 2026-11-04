@@ -4,43 +4,64 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="color-scheme" content="light">
-<title>期货月差 · 价差分析 | FUTURES_SPREAD</title>
+<title>期货月差 · 价差分析 | Futures Spread</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@300;400;500;600;700&display=swap">
 <link rel="stylesheet" href="css/style.css">
 </head>
-<body class="bg-grid-pattern">
+<body>
 
+<!-- 颗粒质感覆盖层 -->
+<div class="grain-overlay" aria-hidden="true"></div>
+
+<!-- 有机背景形状 -->
+<div class="bg-shapes" aria-hidden="true">
+  <span class="bg-shape shape-sage animate-float"></span>
+  <span class="bg-shape shape-clay animate-float"></span>
+</div>
+
+<!-- 悬浮导航 -->
 <header class="app-header">
   <div class="header-inner">
-    <div class="brand-lockup">
-      <div class="logo-box" aria-hidden="true">⇄</div>
-      <div class="logo-text">
-        <h1>FUTURES_SPREAD</h1>
-        <span>期货月差 · 价差分析终端　/　SYS.VER.2.0</span>
-      </div>
-    </div>
+    <a class="brand-lockup" href="#top">
+      <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 19C5 11 11 5 19 5c0 8-6 14-14 14Z"/><path d="M5 19c3.6-3.6 7.2-5.8 11-6.8"/></svg>
+      <span class="logo-text">
+        <h1>Futures Spread</h1>
+        <span>期货月差 · 价差研究</span>
+      </span>
+    </a>
+
+    <nav class="nav-links" aria-hidden="true">
+      <a href="#selector">选择合约</a>
+      <a href="#result">走势图</a>
+      <a href="#archive">数据说明</a>
+    </nav>
+
     <div class="header-right">
       <div class="datastatus" id="dataStatus">
         <span class="dot" id="dataDot"></span>
         <span id="dataStatusText">数据加载中…</span>
       </div>
-      <span class="power-btn" title="SYSTEM POWER" aria-hidden="true">⏻</span>
     </div>
   </div>
 </header>
 
-<main class="main-content">
+<main class="main-content" id="top">
 <div class="content-container">
 
-  <!-- 选择区 -->
-  <section class="control-panel selector">
-    <span class="screw-head screw-tl"></span>
-    <span class="screw-head screw-tr"></span>
-    <span class="screw-head screw-bl"></span>
-    <span class="screw-head screw-br"></span>
+  <!-- Hero -->
+  <section class="hero">
+    <span class="hero-tag">Seasonal · Spread · Structure</span>
+    <h1>月差与价差，<br><span class="italic">一眼看清节奏</span></h1>
+    <p class="hero-desc">
+      覆盖国内主要期货品种与全部月份合约，按年度叠加看季节性，
+      随时切换品种价差、同品种月差、油粕比与内外套。
+    </p>
+  </section>
 
+  <!-- 选择区 -->
+  <section class="control-panel selector" id="selector">
     <div class="control-inner">
       <div class="mode-switch">
         <button class="mode-btn active" data-mode="price"><span class="mode-num">01</span>品种价格</button>
@@ -52,7 +73,7 @@
       </div>
 
       <div class="hot-picks" id="hotPicks">
-        <span class="hot-label">快选 / PRESET</span>
+        <span class="hot-label">快选</span>
         <button class="chip" data-p="P">P 棕榈油</button>
         <button class="chip" data-p="Y">Y 豆油</button>
         <button class="chip" data-p="OI">OI 菜油</button>
@@ -118,12 +139,7 @@
   </section>
 
   <!-- 结果区 -->
-  <section class="analyzer-container result">
-    <span class="screw-head screw-tl"></span>
-    <span class="screw-head screw-tr"></span>
-    <span class="screw-head screw-bl"></span>
-    <span class="screw-head screw-br"></span>
-
+  <section class="analyzer-container result" id="result">
     <div class="analyzer-content">
       <div class="result-head">
         <h2 id="resultTitle">价差走势</h2>
@@ -197,8 +213,6 @@
       </div>
 
       <div class="chart-wrap">
-        <div class="screen-inset-shadow"></div>
-        <div class="crt-overlay"></div>
         <canvas id="spreadChart"></canvas>
         <div class="chart-empty" id="chartEmpty">请选择品种与合约</div>
       </div>
@@ -242,14 +256,9 @@
   </section>
 
   <!-- 数据管理 -->
-  <section class="log-panel datapanel">
-    <span class="screw-head screw-tl"></span>
-    <span class="screw-head screw-tr"></span>
-    <span class="screw-head screw-bl"></span>
-    <span class="screw-head screw-br"></span>
-
+  <section class="log-panel datapanel" id="archive">
     <div class="log-inner">
-      <h2>数据管理 / DATA_ARCHIVE</h2>
+      <h2>数据说明 / Data Archive</h2>
 
       <div class="panel-grid">
         <div class="panel-col">
@@ -280,9 +289,26 @@
 
 <footer class="app-footer">
   <div class="footer-inner">
-    <span>数据来源：OpenCTP 数据中心 + 新浪自动采集 + 本地 Excel</span>
-    <span>STATIC TERMINAL · NO BACKEND SERVER</span>
+    <div class="footer-brand">
+      <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 19C5 11 11 5 19 5c0 8-6 14-14 14Z"/><path d="M5 19c3.6-3.6 7.2-5.8 11-6.8"/></svg>
+      <span class="footer-name">Futures Spread</span>
+    </div>
+    <div class="footer-cols">
+      <div>
+        <h4>来源</h4>
+        <p>OpenCTP 数据中心 · 新浪自动采集 · 本地 Excel</p>
+      </div>
+      <div>
+        <h4>说明</h4>
+        <p>静态站点，无后端服务；数据每日收盘后自动更新。</p>
+      </div>
+      <div>
+        <h4>回看</h4>
+        <p>月差 / 价差 / 油粕比 / 内外套 / 日度海外数据</p>
+      </div>
+    </div>
   </div>
+  <div class="footer-legal">© 2026 Futures Spread · 数据仅作研究参考，不构成投资建议</div>
 </footer>
 
 <!-- 本地库优先，缺失时 app.js 会回退到 CDN -->
